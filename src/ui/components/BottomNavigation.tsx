@@ -60,7 +60,7 @@ const styles = StyleSheet.create({
     gap: 3,
     borderRadius: 8
   },
-  activeItem: { backgroundColor: "#EFF6FF" },
+  activeItem: { backgroundColor: colors.primarySoft },
   label: { color: colors.muted, fontSize: 11, fontWeight: "800" },
   activeLabel: { color: colors.primary }
 });

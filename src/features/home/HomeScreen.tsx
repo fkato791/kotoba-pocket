@@ -227,7 +227,7 @@ const styles = StyleSheet.create({
   },
   summaryCaption: { color: colors.muted, fontSize: 13, fontWeight: "700", marginTop: spacing.xs },
   miniHeatmap: { flexDirection: "row", gap: spacing.xs },
-  miniCell: { flex: 1, height: 18, borderRadius: 5, backgroundColor: "#EFF6FF", borderWidth: 1, borderColor: colors.border },
+  miniCell: { flex: 1, height: 18, borderRadius: 5, backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: colors.border },
   miniCellDone: { backgroundColor: colors.primary, borderColor: colors.primary },
   summaryFoot: { color: colors.muted, fontSize: 12, fontWeight: "700" },
   searchBox: {

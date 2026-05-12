@@ -13,6 +13,7 @@ export function Chip({ label, selected = false, onPress }: ChipProps): JSX.Eleme
       accessibilityRole={onPress ? "button" : "text"}
       accessibilityState={{ selected }}
       onPress={onPress}
+      hitSlop={8}
       style={[styles.chip, selected && styles.selected]}
     >
       <Text style={[styles.label, selected && styles.selectedLabel]}>{label}</Text>
@@ -22,7 +23,7 @@ export function Chip({ label, selected = false, onPress }: ChipProps): JSX.Eleme
 
 const styles = StyleSheet.create({
   chip: {
-    minHeight: 36,
+    minHeight: 40,
     borderRadius: 18,
     paddingHorizontal: spacing.md,
     alignItems: "center",

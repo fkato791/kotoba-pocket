@@ -1,120 +1,78 @@
 # Kotoba Pocket
 
-Kotoba Pocket is a production-quality MVP for Japanese learners collecting English words, idioms, phrases, phrasal verbs, and collocations. It is capture-first, local-first, private by default, and designed around short spaced-repetition sessions.
+Kotoba Pocket は、日本語話者向けの英単語・イディオム学習アプリ MVP です。出会った英語をすばやく保存し、短い復習セッションと学習記録で習慣化できることを重視しています。
 
-## Stack
+現在は **ローカルMVP** として、Web / Expo 上での入力、保存、復習、学習記録、CSV/JSONバックアップを確認する段階です。Supabaseログイン同期は保留中でも、ローカル保存と復習は利用できます。
+
+## 現在できること
+
+- すばやく単語・意味を追加
+- 写真URIをカードに保存
+- 複数デッキへの保存
+- 端末TTSによる発音再生
+- カード詳細編集、アーカイブ、削除確認
+- コレクション検索・フィルター
+- 復習モード: カード、選択、穴埋め、入力
+- 復習時間: 30秒 / 1分 / 3分 / 無制限
+- 学習記録と365日ハビットトラッカー
+- CSVインポート/エクスポート
+- JSONバックアップ/復元
+- インポート時の重複スキップ
+- オフライン前提のローカル保存
+
+## 技術スタック
 
 - Expo + React Native + TypeScript
 - Expo Router
-- SQLite for offline-first local storage
-- Supabase Auth, Postgres, Storage, and Edge Functions for sync and backup
-- Zustand for local app state
-- TanStack Query for server state and offline-friendly networking
-- Zod validation
-- FSRS-compatible scheduling module
-- Native platform TTS via `expo-speech`
+- SQLite。WebではブラウザlocalStorageベースの簡易DBを使用
+- Supabase Auth / Postgres / Edge Functions。同期は保留中
+- TanStack Query
+- Zod
+- FSRS互換の復習スケジューリング
+- `expo-speech` による端末TTS
 
-## Project Structure
-
-```text
-app/                         Expo Router screens
-src/domain/                  TypeScript models and Zod schemas
-src/data/local/              SQLite database, mappers, sync queue
-src/data/repositories/       Local-first repositories
-src/data/remote/             Supabase client and API calls
-src/features/                Feature modules
-src/ui/components/           Reusable UI components
-supabase/migrations/         Postgres schema and RLS policies
-tests/                       Unit and integration test skeletons
-e2e/                         Detox E2E smoke tests
-docs/                        Store and QA checklists
-```
-
-## Setup
-
-1. Install dependencies:
+## セットアップ
 
 ```bash
 npm install
 ```
 
-2. Copy environment variables:
+`.env.example` を `.env` にコピーします。
 
 ```bash
 cp .env.example .env
 ```
 
-3. Fill in:
+Supabase同期を使わずにローカルMVPを確認する場合、Supabase値は空でも画面確認できます。同期を試す場合は以下を設定します。
 
 ```text
 EXPO_PUBLIC_SUPABASE_URL=
 EXPO_PUBLIC_SUPABASE_ANON_KEY=
 ```
 
-4. Start Expo:
+## 実行方法
+
+Webで確認:
+
+```bash
+npm run web:preview
+```
+
+表示URL:
+
+```text
+http://localhost:8082
+```
+
+Expo Go / 実機で確認:
 
 ```bash
 npm run start
 ```
 
-## Supabase Setup
+表示されたQRコードをExpo Goで読み取ります。
 
-1. Create a Supabase project.
-2. Apply migrations:
-
-```bash
-supabase db push
-```
-
-3. Configure auth providers:
-
-- Email magic link
-- Apple Sign In
-- Google Sign In
-
-4. Create an optional private storage bucket for generated or uploaded pronunciation assets:
-
-```text
-pronunciation-assets
-```
-
-5. Deploy Edge Functions for:
-
-- `POST /v1/sync/push`
-- `GET /v1/sync/pull?since=<iso_timestamp>`
-- Import/export endpoints
-- Share link public read endpoint
-- Account purge
-
-The app already wraps these calls behind `src/data/remote/apiClient.ts`.
-See `docs/api.md` for the full REST contract.
-See `docs/supabase-setup.md` for step-by-step Supabase setup.
-
-## Local-First Behavior
-
-All writes go to SQLite first through repository functions. Each mutation then writes an ordered sync item to `sync_queue`. The sync worker:
-
-1. Checks connectivity.
-2. Uploads queued changes in order.
-3. Removes accepted mutations.
-4. Records rejected mutations.
-5. Stores conflicts using field-level merge where safe, otherwise last-write-wins.
-
-The app remains usable offline indefinitely.
-
-## MVP Screens
-
-- Home / Inbox
-- Quick Add
-- Card detail/edit
-- Review session
-- Collection
-- Import/export
-- Settings
-
-The primary UI language is Japanese.
-
-## Testing
+## よく使うコマンド
 
 ```bash
 npm run typecheck
@@ -122,35 +80,54 @@ npm run lint
 npm test
 ```
 
-Included unit coverage:
+Windows上の一部環境では、Vitest/esbuild が親ディレクトリ権限で止まることがあります。
 
-- FSRS scheduling transitions
-- Answer normalization
-- CSV parser validation
-- Sync merge logic
-- Review queue filtering
-
-Integration and E2E specs are scaffolded as executable TODOs for the Supabase and device-backed flows.
-
-## Deployment
-
-1. Create Expo and Supabase projects.
-2. Add SQL migrations and RLS policies.
-3. Configure auth providers.
-4. Configure optional storage bucket.
-5. Set environment variables.
-6. Run tests and lint.
-7. Build preview app:
-
-```bash
-eas build --profile preview --platform all
+```text
+Cannot read directory "../../../..": Access is denied.
 ```
 
-8. Run manual QA from `docs/app-store-checklist.md`.
-9. Build production binaries:
+この場合でも `npm run typecheck` と `npm run lint` が通っていれば、まずUI確認を優先してください。GitHub Actions 側でのCI結果も確認します。
 
-```bash
-eas build --profile production --platform all
+## プロジェクト構成
+
+```text
+app/                         Expo Router screens
+src/domain/                  TypeScript models and schemas
+src/data/local/              SQLite / Web fallback database
+src/data/repositories/       Local-first repository layer
+src/data/remote/             Supabase client and API adapter
+src/features/                Feature modules
+src/ui/components/           Reusable UI components
+supabase/migrations/         Postgres schema and RLS policies
+tests/                       Unit and integration tests
+docs/                        QA and store checklists
 ```
 
-10. Prepare store metadata, privacy labels, and screenshots.
+## ローカルMVP確認チェック
+
+- Web版でカードを追加できる
+- コレクションに戻ってもカードが残る
+- ブラウザを再読み込みしてもカードが残る
+- 復習画面でカードを復習できる
+- 学習記録に復習数が反映される
+- CSVを書き出せる
+- JSONバックアップを書き出せる
+- CSV/JSONインポートで重複がスキップされる
+- 画面幅を狭くしてもボタンや文字が重ならない
+- ダークモードで文字が読める
+
+## Supabase同期について
+
+Supabaseプロジェクト、SQL migration、Edge Function の土台はありますが、マジックリンク復帰と同期安定化は保留中です。現時点では以下を推奨します。
+
+- 学習データはローカル保存を主経路にする
+- バックアップはCSV/JSONで行う
+- 同期エラーが出てもローカル保存は継続利用する
+
+## 次の品質改善候補
+
+- Android実機またはDevelopment BuildでSQLite永続化を確認
+- iOS実機またはEAS BuildでTTS/写真URIを確認
+- Supabaseマジックリンク復帰の修正
+- アクセシビリティの実機読み上げ確認
+- ストア提出用スクリーンショットとプライバシー説明の準備

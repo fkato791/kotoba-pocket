@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Alert, Platform, ScrollView, StyleSheet, Text, View } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { createCard, listCards } from "@/data/repositories/cardRepository";
@@ -7,6 +7,7 @@ import { cardsToCsv, csvTemplate, previewCsv, type CsvPreviewRow } from "@/featu
 import type { Card } from "@/domain/models";
 import { AppButton } from "@/ui/components/AppButton";
 import { AppInput } from "@/ui/components/AppInput";
+import { ErrorBanner } from "@/ui/components/ErrorBanner";
 import { colors, spacing } from "@/ui/theme";
 
 export function ImportExportScreen(): JSX.Element {
@@ -14,15 +15,23 @@ export function ImportExportScreen(): JSX.Element {
   const [json, setJson] = useState("");
   const [importing, setImporting] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [skippedDuplicates, setSkippedDuplicates] = useState(0);
   const preview = useMemo(() => (csv.trim() ? previewCsv(csv) : null), [csv]);
   const jsonPreview = useMemo(() => previewJsonBackup(json), [json]);
 
   async function importCsvRows(rows: CsvPreviewRow[]): Promise<void> {
     setImporting(true);
     try {
+      const existing = await listCards();
+      let imported = 0;
+      let skipped = 0;
       for (const row of rows) {
+        if (hasDuplicate(existing, row.term, row.meaning_ja)) {
+          skipped += 1;
+          continue;
+        }
         const deck = await findOrCreateDeck(row.deck);
-        await createCard({
+        const card = await createCard({
           term: row.term,
           meaning_ja: row.meaning_ja,
           term_type: row.term_type,
@@ -36,8 +45,11 @@ export function ImportExportScreen(): JSX.Element {
           deck_id: deck.id,
           auto_pronunciation: true
         });
+        existing.push(card);
+        imported += 1;
       }
-      Alert.alert("インポート完了", `${rows.length}件のカードを追加しました。`);
+      setSkippedDuplicates(skipped);
+      Alert.alert("インポート完了", buildImportMessage(imported, skipped));
       setCsv("");
     } finally {
       setImporting(false);
@@ -70,9 +82,16 @@ export function ImportExportScreen(): JSX.Element {
   async function importJsonBackup(cards: Card[]): Promise<void> {
     setImporting(true);
     try {
+      const existing = await listCards();
       const deck = await findOrCreateDeck("Imported");
+      let imported = 0;
+      let skipped = 0;
       for (const card of cards) {
-        await createCard({
+        if (hasDuplicate(existing, card.term, card.meaning_ja)) {
+          skipped += 1;
+          continue;
+        }
+        const created = await createCard({
           term: card.term,
           meaning_ja: card.meaning_ja,
           term_type: card.term_type,
@@ -84,8 +103,11 @@ export function ImportExportScreen(): JSX.Element {
           deck_id: deck.id,
           auto_pronunciation: true
         });
+        existing.push(created);
+        imported += 1;
       }
-      Alert.alert("JSON復元完了", `${cards.length}件のカードを追加しました。`);
+      setSkippedDuplicates(skipped);
+      Alert.alert("JSON復元完了", buildImportMessage(imported, skipped));
       setJson("");
     } finally {
       setImporting(false);
@@ -96,7 +118,9 @@ export function ImportExportScreen(): JSX.Element {
     <ScrollView contentContainerStyle={styles.content}>
       <View style={styles.header}>
         <Text style={styles.title}>データ</Text>
-        <Text style={styles.subtitle}>ログイン同期を使わなくても、CSVとJSONでローカルデータを持ち出せます。</Text>
+        <Text style={styles.subtitle}>
+          ログイン同期を使わなくても、CSVとJSONでローカルデータを持ち出せます。
+        </Text>
       </View>
 
       <Section title="CSVインポート">
@@ -119,7 +143,7 @@ export function ImportExportScreen(): JSX.Element {
               <Text key={`${row.term}-${index}`} style={styles.previewText}>・{row.term} - {row.meaning_ja}</Text>
             ))}
             {preview.errors.slice(0, 3).map(error => (
-              <Text key={`${error.row}-${error.message}`} style={styles.errorText}>行{error.row}: {error.message}</Text>
+              <ErrorBanner key={`${error.row}-${error.message}`} title={`行${error.row}を確認してください`} message={error.message} />
             ))}
           </View>
         ) : null}
@@ -144,7 +168,7 @@ export function ImportExportScreen(): JSX.Element {
             <Text style={styles.report}>
               {jsonPreview.error ? "JSONを確認してください" : `復元可能: ${jsonPreview.cards.length}件`}
             </Text>
-            {jsonPreview.error ? <Text style={styles.errorText}>{jsonPreview.error}</Text> : null}
+            {jsonPreview.error ? <ErrorBanner title="JSONを確認してください" message={jsonPreview.error} /> : null}
             {jsonPreview.cards.slice(0, 3).map((card, index) => (
               <Text key={`${card.term}-${index}`} style={styles.previewText}>・{card.term} - {card.meaning_ja}</Text>
             ))}
@@ -158,20 +182,28 @@ export function ImportExportScreen(): JSX.Element {
         />
       </Section>
 
+      {skippedDuplicates > 0 ? (
+        <Text style={styles.helper}>直近のインポートで、重複している{skippedDuplicates}件をスキップしました。</Text>
+      ) : null}
+
       <Section title="エクスポート">
-        <AppButton label="CSVを書き出す" variant="secondary" loading={exporting} onPress={() => void exportCsv()} />
-        <AppButton label="JSONバックアップを書き出す" variant="secondary" loading={exporting} onPress={() => void exportJson()} />
-        <Text style={styles.helper}>Webではファイルをダウンロードします。スマホでは共有シートまたはクリップボードを使います。</Text>
+        <AppButton label="CSVを書き出し" variant="secondary" loading={exporting} onPress={() => void exportCsv()} />
+        <AppButton label="JSONバックアップを書き出し" variant="secondary" loading={exporting} onPress={() => void exportJson()} />
+        <Text style={styles.helper}>
+          Webではファイルをダウンロードします。スマホでは共有シートまたはクリップボードを使います。
+        </Text>
       </Section>
 
       <Section title="ログイン同期">
-        <Text style={styles.helper}>マジックリンク同期は保留中です。ローカル保存・復習・CSV/JSONバックアップはそのまま利用できます。</Text>
+        <Text style={styles.helper}>
+          マジックリンク同期は保留中です。ローカル保存、復習、CSV/JSONバックアップはそのまま利用できます。
+        </Text>
       </Section>
     </ScrollView>
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }): JSX.Element {
+function Section({ title, children }: { title: string; children: ReactNode }): JSX.Element {
   return (
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>{title}</Text>
@@ -182,6 +214,17 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function parseTags(tags?: string): string[] {
   return tags?.split(/[;,]/).map(tag => tag.trim()).filter(Boolean) ?? [];
+}
+
+function hasDuplicate(cards: Card[], term: string, meaningJa: string): boolean {
+  const normalizedTerm = term.trim().toLowerCase();
+  const normalizedMeaning = meaningJa.trim();
+  return cards.some(card => card.term.trim().toLowerCase() === normalizedTerm && card.meaning_ja.trim() === normalizedMeaning);
+}
+
+function buildImportMessage(imported: number, skipped: number): string {
+  const base = `${imported}件のカードを追加しました。`;
+  return skipped > 0 ? `${base} 重複している${skipped}件はスキップしました。` : base;
 }
 
 async function shareText(content: string, fileName: string, mimeType: string): Promise<void> {
@@ -234,6 +277,5 @@ const styles = StyleSheet.create({
   reportBox: { gap: spacing.xs, padding: spacing.md, borderRadius: 8, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border },
   report: { color: colors.text, fontWeight: "800" },
   previewText: { color: colors.text, lineHeight: 20 },
-  errorText: { color: colors.danger, lineHeight: 20 },
   helper: { color: colors.muted, lineHeight: 20 }
 });

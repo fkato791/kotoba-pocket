@@ -28,7 +28,7 @@ export function CardPreview({ card, onPress }: CardPreviewProps): JSX.Element {
             {card.part_of_speech ? <Text style={styles.type}>{card.part_of_speech}</Text> : null}
           </View>
         </View>
-        {imageUri ? <Image source={{ uri: imageUri }} style={styles.thumbnail} accessibilityLabel="添付写真" /> : null}
+        {imageUri ? <Image source={{ uri: imageUri }} style={styles.thumbnail} accessibilityLabel="添付画像" /> : null}
       </View>
       <Text style={styles.meaning} numberOfLines={2}>{card.meaning_ja}</Text>
       {card.note ? <Text style={styles.example} numberOfLines={1}>{card.note}</Text> : null}
@@ -63,7 +63,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     padding: spacing.lg,
     gap: spacing.sm,
-    shadowColor: "#0F172A",
+    shadowColor: colors.shadow,
     shadowOpacity: 0.06,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 }
@@ -77,7 +77,7 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontSize: 12,
     fontWeight: "800",
-    backgroundColor: colors.chip,
+    backgroundColor: colors.primarySoft,
     paddingHorizontal: spacing.sm,
     paddingVertical: 4,
     borderRadius: 8
@@ -90,10 +90,10 @@ const styles = StyleSheet.create({
     color: colors.success,
     fontSize: 12,
     fontWeight: "900",
-    backgroundColor: "#DCFCE7",
+    backgroundColor: colors.successSoft,
     paddingHorizontal: spacing.sm,
     paddingVertical: 4,
     borderRadius: 8
   },
-  hardStatus: { color: colors.warning, backgroundColor: "#FEF3C7" }
+  hardStatus: { color: colors.warning, backgroundColor: colors.warningSoft }
 });

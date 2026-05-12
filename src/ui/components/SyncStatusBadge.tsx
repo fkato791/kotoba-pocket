@@ -1,5 +1,6 @@
 import { StyleSheet, Text, View } from "react-native";
 import { useSyncStore } from "@/features/sync/syncStore";
+import { toFriendlyError } from "@/ui/components/ErrorBanner";
 import { colors, spacing } from "@/ui/theme";
 
 const labels = {
@@ -23,12 +24,6 @@ export function SyncStatusBadge(): JSX.Element {
   );
 }
 
-function toFriendlyError(error: string): string {
-  if (error.includes("Unauthorized") || error.includes("401")) return "ログイン状態を確認してください";
-  if (error.toLowerCase().includes("failed to fetch")) return "ネットワーク接続を確認してください";
-  return error;
-}
-
 const styles = StyleSheet.create({
   badge: {
     alignSelf: "flex-start",
@@ -40,8 +35,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: colors.chip
   },
-  waiting: { backgroundColor: "#FEF3C7" },
-  error: { backgroundColor: "#FEE2E2" },
+  waiting: { backgroundColor: colors.warningSoft },
+  error: { backgroundColor: colors.dangerSoft },
   text: { color: colors.text, fontSize: 12, fontWeight: "700" },
   detail: { color: colors.muted, fontSize: 11, marginTop: 2 },
   errorText: { color: colors.danger, fontSize: 11, marginTop: spacing.xs, maxWidth: 260 }

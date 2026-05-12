@@ -8,6 +8,7 @@ import type { SyncStatus } from "@/features/sync/syncStore";
 import { syncWorker } from "@/features/sync/syncWorker";
 import { AppButton } from "@/ui/components/AppButton";
 import { AppInput } from "@/ui/components/AppInput";
+import { ErrorBanner } from "@/ui/components/ErrorBanner";
 import { SyncStatusBadge } from "@/ui/components/SyncStatusBadge";
 import { colors, spacing } from "@/ui/theme";
 
@@ -68,7 +69,7 @@ export function SettingsScreen(): JSX.Element {
         <Text style={styles.text}>現在の状態: {syncStatusLabels[syncStatus]}</Text>
         <Text style={styles.text}>最終同期: {lastSyncedAt ? new Date(lastSyncedAt).toLocaleString("ja-JP") : "未同期"}</Text>
         <Text style={styles.text}>今回の取得: {pulledCount}件 / 競合: {conflictCount}件</Text>
-        {syncError ? <Text style={styles.errorText}>{syncError}</Text> : null}
+        {syncError ? <ErrorBanner title="同期できませんでした" message={syncError} /> : null}
         <AppButton label="今すぐ同期" variant="secondary" onPress={() => void syncWorker.flush()} />
       </Section>
 
@@ -111,7 +112,7 @@ const syncStatusLabels: Record<SyncStatus, string> = {
 };
 
 const styles = StyleSheet.create({
-  content: { padding: spacing.lg, gap: spacing.md, backgroundColor: colors.background, paddingBottom: 112 },
+  content: { width: "100%", maxWidth: 760, alignSelf: "center", padding: spacing.lg, gap: spacing.md, backgroundColor: colors.background, paddingBottom: 112 },
   section: {
     padding: spacing.md,
     gap: spacing.md,
@@ -121,6 +122,5 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface
   },
   title: { color: colors.text, fontSize: 18, fontWeight: "900" },
-  text: { color: colors.text, lineHeight: 22 },
-  errorText: { color: colors.danger, lineHeight: 20 }
+  text: { color: colors.text, lineHeight: 22 }
 });

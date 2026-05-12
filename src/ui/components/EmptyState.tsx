@@ -7,12 +7,13 @@ interface EmptyStateProps {
   description?: string;
   actionLabel?: string;
   onAction?: () => void;
+  iconLabel?: string;
 }
 
-export function EmptyState({ title, description, actionLabel, onAction }: EmptyStateProps): JSX.Element {
+export function EmptyState({ title, description, actionLabel, onAction, iconLabel = "A" }: EmptyStateProps): JSX.Element {
   return (
-    <View style={styles.wrap}>
-      <View style={styles.icon}><Text style={styles.iconText}>A</Text></View>
+    <View style={styles.wrap} accessibilityRole="summary">
+      <View style={styles.icon} accessible={false}><Text style={styles.iconText}>{iconLabel}</Text></View>
       <Text style={styles.title}>{title}</Text>
       {description ? <Text style={styles.description}>{description}</Text> : null}
       {actionLabel && onAction ? <AppButton label={actionLabel} onPress={onAction} /> : null}
@@ -34,7 +35,7 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: colors.chip,
+    backgroundColor: colors.primarySoft,
     alignItems: "center",
     justifyContent: "center"
   },

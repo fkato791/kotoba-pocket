@@ -151,6 +151,15 @@ export async function initializeDatabase(): Promise<void> {
   await addColumnIfMissing(db, "cards", "meaning_image_uri TEXT");
 }
 
+export function resetDatabaseForTests(): void {
+  dbPromise = null;
+  memoryState.decks = [];
+  memoryState.cards = [];
+  memoryState.review_logs = [];
+  memoryState.sync_queue = [];
+  memoryState.sync_state = [];
+}
+
 async function addColumnIfMissing(db: AppDatabase, table: string, definition: string): Promise<void> {
   try {
     await db.runAsync(`ALTER TABLE ${table} ADD COLUMN ${definition}`);
@@ -312,7 +321,7 @@ function createMemoryDatabase(): AppDatabase {
       if (sql.includes("from review_logs") && sql.includes("group by")) {
         return aggregateReviewLogs(String(params[0] ?? "")) as T[];
       }
-      if (sql.includes("from cards")) return filterMemoryCards(params) as T[];
+      if (sql.includes("from cards")) return filterMemoryCards(source, params) as T[];
       return [];
     },
     async getFirstAsync<T>(source: string, ...params: unknown[]) {
@@ -426,15 +435,39 @@ function updateDeckRow(params: unknown[]): void {
   });
 }
 
-function filterMemoryCards(params: unknown[]): Record<string, unknown>[] {
+function filterMemoryCards(source: string, params: unknown[]): Record<string, unknown>[] {
+  const sql = source.trim().replace(/\s+/g, " ").toLowerCase();
+  let paramIndex = 0;
   let rows = memoryState.cards.filter(row => row.deleted_at === null);
-  for (const param of params) {
-    if (typeof param !== "string") continue;
-    if (param.startsWith("%")) {
-      const q = param.replaceAll("%", "").toLowerCase();
-      rows = rows.filter(row => `${row.term ?? ""} ${row.meaning_ja ?? ""} ${row.note ?? ""}`.toLowerCase().includes(q));
-    }
+
+  if (sql.includes("is_archived = ?")) {
+    const archived = Number(params[paramIndex++]) === 1;
+    rows = rows.filter(row => Boolean(row.is_archived) === archived);
   }
+  if (sql.includes("deck_id = ?")) {
+    const deckId = params[paramIndex++];
+    rows = rows.filter(row => row.deck_id === deckId);
+  }
+  if (sql.includes("term_type = ?")) {
+    const termType = params[paramIndex++];
+    rows = rows.filter(row => row.term_type === termType);
+  }
+  if (sql.includes("where ct.card_id = cards.id")) {
+    paramIndex += 1;
+  }
+  if (sql.includes("(difficulty >= 3 or is_pinned = 1)")) {
+    rows = rows.filter(row => Number(row.difficulty ?? 0) >= 3 || Number(row.is_pinned ?? 0) === 1);
+  }
+  if (sql.includes("(due_at is null or due_at <= ?)")) {
+    const dueBefore = String(params[paramIndex++] ?? "");
+    rows = rows.filter(row => !row.due_at || String(row.due_at) <= dueBefore);
+  }
+  if (sql.includes("(term like ?")) {
+    const query = String(params[paramIndex++] ?? "").replaceAll("%", "").toLowerCase();
+    paramIndex += 2;
+    rows = rows.filter(row => `${row.term ?? ""} ${row.meaning_ja ?? ""} ${row.note ?? ""}`.toLowerCase().includes(query));
+  }
+
   return sortRows(rows);
 }
 

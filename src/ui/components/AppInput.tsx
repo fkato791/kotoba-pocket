@@ -12,6 +12,7 @@ export function AppInput({ label, error, style, ...props }: AppInputProps): JSX.
       <Text style={styles.label}>{label}</Text>
       <TextInput
         placeholderTextColor={colors.muted}
+        accessibilityLabel={props.accessibilityLabel ?? label}
         style={[styles.input, props.multiline && styles.multiline, style]}
         {...props}
       />

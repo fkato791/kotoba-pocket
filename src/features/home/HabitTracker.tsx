@@ -8,6 +8,7 @@ interface HabitTrackerProps {
 
 export function HabitTracker({ data }: HabitTrackerProps): JSX.Element {
   const completedDays = data.filter(item => item.count > 0).length;
+  const totalReviews = data.reduce((sum, item) => sum + item.count, 0);
   const streak = calculateCurrentStreak(data);
   const max = Math.max(1, ...data.map(item => item.count));
   const months = toMonthGroups(data);
@@ -16,13 +17,19 @@ export function HabitTracker({ data }: HabitTrackerProps): JSX.Element {
     <View style={styles.panel}>
       <View style={styles.header}>
         <View style={styles.headerText}>
-          <Text style={styles.title}>習慣トラッカー</Text>
-          <Text style={styles.caption}>365日を1日ごとに表示</Text>
+          <Text style={styles.title}>ハビットトラッカー</Text>
+          <Text style={styles.caption}>過去365日を1日ごとに表示</Text>
         </View>
         <View style={styles.streakBadge}>
           <Text style={styles.streakNumber}>{streak}</Text>
           <Text style={styles.streakLabel}>日連続</Text>
         </View>
+      </View>
+
+      <View style={styles.statsRow}>
+        <Metric label="学習日" value={`${completedDays}日`} />
+        <Metric label="復習数" value={`${totalReviews}件`} />
+        <Metric label="平均" value={`${completedDays > 0 ? Math.round(totalReviews / completedDays) : 0}件/日`} />
       </View>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
@@ -59,7 +66,7 @@ export function HabitTracker({ data }: HabitTrackerProps): JSX.Element {
       </ScrollView>
 
       <View style={styles.legend}>
-        <Text style={styles.summary}>過去365日 {completedDays}日 達成</Text>
+        <Text style={styles.summary}>過去365日 {completedDays}日 学習</Text>
         <View style={styles.legendScale}>
           <Text style={styles.legendText}>少</Text>
           {levelStyles.map((style, index) => (
@@ -68,6 +75,15 @@ export function HabitTracker({ data }: HabitTrackerProps): JSX.Element {
           <Text style={styles.legendText}>多</Text>
         </View>
       </View>
+    </View>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string }): JSX.Element {
+  return (
+    <View style={styles.metric}>
+      <Text style={styles.metricValue}>{value}</Text>
+      <Text style={styles.metricLabel}>{label}</Text>
     </View>
   );
 }
@@ -91,7 +107,7 @@ function toMonthGroups(data: DailyReviewCount[]): MonthGroup[] {
     const weekIndex = Math.floor((date.getDate() + firstWeekdayOfMonth(date) - 1) / 7);
     const dayIndex = date.getDay();
     const emptyWeek: (DailyReviewCount | null)[] = [null, null, null, null, null, null, null];
-    const week = group.weeks[weekIndex] ?? emptyWeek;
+    const week = group.weeks[weekIndex] ?? [...emptyWeek];
     week[dayIndex] = item;
     group.weeks[weekIndex] = week;
     groups.set(key, group);
@@ -151,6 +167,10 @@ const styles = StyleSheet.create({
   },
   streakNumber: { color: colors.primary, fontSize: 22, fontWeight: "900" },
   streakLabel: { color: colors.text, fontSize: 11, fontWeight: "800" },
+  statsRow: { flexDirection: "row", gap: spacing.sm },
+  metric: { flex: 1, padding: spacing.sm, borderRadius: 8, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border },
+  metricValue: { color: colors.text, fontSize: 16, fontWeight: "900" },
+  metricLabel: { color: colors.muted, fontSize: 12, fontWeight: "800", marginTop: 2 },
   scrollContent: {
     paddingBottom: spacing.xs
   },
