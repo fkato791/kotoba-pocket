@@ -64,7 +64,7 @@ export function HomeScreen(): JSX.Element {
               onPress={() => router.push("/quick-add")}
             />
           </View>
-          <Pressable accessibilityRole="button" onPress={() => router.push("/review")}>
+          <Pressable accessibilityRole="button" accessibilityLabel="前回の続きから復習する" onPress={() => router.push("/review")}>
             <Text style={styles.continueLink}>前回の続きから復習する</Text>
           </Pressable>
         </View>
@@ -91,7 +91,7 @@ export function HomeScreen(): JSX.Element {
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>最近の単語</Text>
-          <Pressable accessibilityRole="button" onPress={() => router.push("/collection")}>
+          <Pressable accessibilityRole="button" accessibilityLabel="すべての単語を見る" onPress={() => router.push("/collection")}>
             <Text style={styles.textLink}>すべて見る</Text>
           </Pressable>
         </View>
@@ -145,7 +145,7 @@ function StudySummaryCard({ data }: { data: DailyReviewCount[] }): JSX.Element {
           <Text style={styles.sectionTitle}>学習記録</Text>
           <Text style={styles.summaryCaption}>今週 {weekDays} / 7日 ・ {streak}日連続</Text>
         </View>
-        <Pressable accessibilityRole="button" onPress={() => router.push("/study-stats")}>
+        <Pressable accessibilityRole="button" accessibilityLabel="学習記録を詳しく見る" onPress={() => router.push("/study-stats")}>
           <Text style={styles.textLink}>詳しく見る</Text>
         </Pressable>
       </View>

@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import { Alert, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import { router } from "expo-router";
 import * as DocumentPicker from "expo-document-picker";
-import { ImagePlus, X } from "lucide-react-native";
+import { ImagePlus, Volume2, X } from "lucide-react-native";
 import { createCard } from "@/data/repositories/cardRepository";
 import { ensureDefaultDeck, listDecks } from "@/data/repositories/deckRepository";
 import type { Deck, TermType } from "@/domain/models";
 import { quickAddCardSchema } from "@/domain/schemas";
 import { analytics } from "@/features/analytics/analytics";
+import { nativeTtsProvider } from "@/features/audio/tts";
 import { hasSensitiveContent } from "@/lib/privacy/sensitiveContent";
 import { AppButton } from "@/ui/components/AppButton";
 import { AppInput } from "@/ui/components/AppInput";
@@ -19,7 +20,7 @@ const termTypes: { label: string; value: TermType }[] = [
   { label: "イディオム", value: "idiom" },
   { label: "フレーズ", value: "phrase" },
   { label: "句動詞", value: "phrasal_verb" },
-  { label: "連語", value: "collocation" }
+  { label: "コロケーション", value: "collocation" }
 ];
 
 export function QuickAddScreen(): JSX.Element {
@@ -74,7 +75,10 @@ export function QuickAddScreen(): JSX.Element {
       return;
     }
     if (hasSensitiveContent(term, meaningJa, note, sourceText)) {
-      Alert.alert("個人情報の可能性", "カードや出典に個人情報らしき内容があります。保存前に確認してください。");
+      Alert.alert(
+        "個人情報の可能性があります",
+        "カードや出典に個人情報らしい内容があります。保存前に内容を確認してください。"
+      );
     }
     setSaving(true);
     try {
@@ -104,40 +108,59 @@ export function QuickAddScreen(): JSX.Element {
   return (
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <AppInput label="英語" value={term} onChangeText={setTerm} placeholder="take it for granted" autoFocus />
-        <PhotoPickerRow
-          label="英語の写真"
-          fileName={termImageName}
-          onPick={() => void pickImage(setTermImageUri, setTermImageName)}
-          onClear={() => {
-            setTermImageUri("");
-            setTermImageName("");
-          }}
-        />
-        <AppInput label="意味" value={meaningJa} onChangeText={setMeaningJa} placeholder="当然だと思う" />
-        <PhotoPickerRow
-          label="意味の写真"
-          fileName={meaningImageName}
-          onPick={() => void pickImage(setMeaningImageUri, setMeaningImageName)}
-          onClear={() => {
-            setMeaningImageUri("");
-            setMeaningImageName("");
-          }}
-        />
+        <View style={styles.header}>
+          <Text style={styles.title}>すばやく追加</Text>
+          <Text style={styles.subtitle}>英語と意味だけで保存できます。写真や例文はあとから編集しても大丈夫です。</Text>
+        </View>
+
+        <View style={styles.primaryFields}>
+          <AppInput label="英語" value={term} onChangeText={setTerm} placeholder="take it for granted" autoFocus />
+          <PhotoPickerRow
+            label="英語の写真"
+            fileName={termImageName}
+            imageUri={termImageUri}
+            onPick={() => void pickImage(setTermImageUri, setTermImageName)}
+            onClear={() => {
+              setTermImageUri("");
+              setTermImageName("");
+            }}
+          />
+          <AppInput label="意味" value={meaningJa} onChangeText={setMeaningJa} placeholder="当然だと思う" />
+          <PhotoPickerRow
+            label="意味の写真"
+            fileName={meaningImageName}
+            imageUri={meaningImageUri}
+            onPick={() => void pickImage(setMeaningImageUri, setMeaningImageName)}
+            onClear={() => {
+              setMeaningImageUri("");
+              setMeaningImageName("");
+            }}
+          />
+        </View>
+
         <View style={styles.row}>
           <View style={styles.switchText}>
             <Text style={styles.label}>発音音声を自動追加</Text>
-            <Text style={styles.helperText}>英語の入力から端末TTSで再生します</Text>
+            <Text style={styles.helperText}>英語欄の内容を端末TTSで再生できるようにします。</Text>
           </View>
           <Switch value={autoPronunciation} onValueChange={setAutoPronunciation} />
         </View>
+        <AppButton
+          label="発音を確認"
+          variant="secondary"
+          disabled={!term.trim()}
+          icon={<Volume2 size={18} color={colors.text} />}
+          onPress={() => void nativeTtsProvider.speak(term).catch(() => Alert.alert("音声を再生できません"))}
+        />
+
         <Text style={styles.label}>種類</Text>
         <View style={styles.wrapRow}>
           {termTypes.map(item => (
             <Chip key={item.value} label={item.label} selected={termType === item.value} onPress={() => setTermType(item.value)} />
           ))}
         </View>
-        <Text style={styles.label}>デッキ（複数選択可）</Text>
+
+        <Text style={styles.label}>デッキ（複数選択できます）</Text>
         <View style={styles.wrapRow}>
           {decks.map(deck => (
             <Chip
@@ -148,8 +171,12 @@ export function QuickAddScreen(): JSX.Element {
             />
           ))}
         </View>
+
         <View style={styles.row}>
-          <Text style={styles.label}>詳細項目</Text>
+          <View style={styles.switchText}>
+            <Text style={styles.label}>詳細項目</Text>
+            <Text style={styles.helperText}>品詞、例文、メモ、出典を追加できます。</Text>
+          </View>
           <Switch value={advanced} onValueChange={setAdvanced} />
         </View>
         {advanced ? (
@@ -194,16 +221,19 @@ async function pickImage(setUri: (uri: string) => void, setName: (name: string) 
 function PhotoPickerRow({
   label,
   fileName,
+  imageUri,
   onPick,
   onClear
 }: {
   label: string;
   fileName: string;
+  imageUri: string;
   onPick: () => void;
   onClear: () => void;
 }): JSX.Element {
   return (
     <View style={styles.photoRow}>
+      {imageUri ? <Image source={{ uri: imageUri }} style={styles.thumbnail} accessibilityLabel={`${label}のプレビュー`} /> : null}
       <View style={styles.photoText}>
         <Text style={styles.label}>{label}</Text>
         <Text style={styles.photoName} numberOfLines={1}>{fileName || "未選択"}</Text>
@@ -219,26 +249,38 @@ function PhotoPickerRow({
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
-  content: { padding: spacing.lg, gap: spacing.md, paddingBottom: 140 },
-  label: { color: colors.text, fontWeight: "800" },
-  wrapRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
-  photoRow: {
-    minHeight: 56,
+  content: { width: "100%", maxWidth: 760, alignSelf: "center", padding: spacing.lg, gap: spacing.md, paddingBottom: 148 },
+  header: { gap: spacing.xs },
+  title: { color: colors.text, fontSize: 26, fontWeight: "900" },
+  subtitle: { color: colors.muted, fontSize: 14, lineHeight: 20 },
+  primaryFields: {
+    backgroundColor: colors.surface,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: colors.border,
-    backgroundColor: colors.surface,
+    padding: spacing.md,
+    gap: spacing.md
+  },
+  label: { color: colors.text, fontWeight: "800" },
+  wrapRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+  photoRow: {
+    minHeight: 64,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
     padding: spacing.md,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: spacing.md
   },
+  thumbnail: { width: 52, height: 52, borderRadius: 8, backgroundColor: colors.border },
   photoText: { flex: 1, gap: spacing.xs },
   photoName: { color: colors.muted, fontSize: 13 },
-  row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.md },
   switchText: { flex: 1, gap: spacing.xs },
-  helperText: { color: colors.muted, fontSize: 13 },
+  helperText: { color: colors.muted, fontSize: 13, lineHeight: 18 },
   advanced: { gap: spacing.md },
   footer: {
     position: "absolute",

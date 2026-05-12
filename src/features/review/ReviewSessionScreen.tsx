@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { StyleSheet, Text, TextInput, View } from "react-native";
+import { ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { router } from "expo-router";
 import { listCards, recordReview } from "@/data/repositories/cardRepository";
 import type { Card, ReviewMode, ReviewRating } from "@/domain/models";
@@ -52,17 +52,19 @@ export function ReviewSessionScreen(): JSX.Element {
 
   if (!card) {
     return (
-      <View style={styles.screen}>
+      <ScrollView contentContainerStyle={styles.endScreen}>
         <EmptyState
-          title={completed > 0 ? "おつかれさまです" : "今日の復習はありません"}
-          description={`${completed}枚を復習しました`}
+          title={completed > 0 ? "復習完了です" : "今日の復習はありません"}
+          description={completed > 0 ? `${completed}件を復習しました。次の単語も少しずつ積み上げましょう。` : "新しい単語を追加すると、ここからすぐに復習できます。"}
+          actionLabel="単語を追加"
+          onAction={() => router.push("/quick-add")}
         />
         <View style={styles.endActions}>
-          <AppButton label="ホームへ" onPress={() => router.replace("/")} />
-          <AppButton label="コレクション" variant="secondary" onPress={() => router.push("/collection")} />
-          <AppButton label="単語を追加" variant="secondary" onPress={() => router.push("/quick-add")} />
+          <AppButton label="ホームへ戻る" onPress={() => router.replace("/")} />
+          <AppButton label="コレクションを見る" variant="secondary" onPress={() => router.push("/collection")} />
+          <AppButton label="学習記録を見る" variant="secondary" onPress={() => router.push("/study-stats")} />
         </View>
-      </View>
+      </ScrollView>
     );
   }
 
@@ -81,7 +83,7 @@ export function ReviewSessionScreen(): JSX.Element {
       </View>
       <View style={styles.promptPanel}>
         <Text style={styles.prompt}>{mode === "cloze" ? `_____ : ${card.meaning_ja}` : card.term}</Text>
-        {mode === "cloze" ? <Text style={styles.hint}>英語を思い出してください</Text> : null}
+        {mode === "cloze" ? <Text style={styles.hint}>英語を思い出してみましょう</Text> : null}
         {mode === "mcq" && !revealed ? (
           <View style={styles.choices}>
             {choices.map(choice => (
@@ -127,7 +129,7 @@ export function ReviewSessionScreen(): JSX.Element {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, padding: spacing.lg, gap: spacing.lg, backgroundColor: colors.background },
+  screen: { flex: 1, padding: spacing.lg, gap: spacing.lg, backgroundColor: colors.background, paddingBottom: 112 },
   progress: { color: colors.muted, fontWeight: "700", textAlign: "center" },
   modeRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
   promptPanel: {
@@ -153,7 +155,16 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: spacing.md,
     fontSize: 18,
-    backgroundColor: colors.background
+    backgroundColor: colors.background,
+    color: colors.text
+  },
+  endScreen: {
+    flexGrow: 1,
+    justifyContent: "center",
+    padding: spacing.lg,
+    gap: spacing.lg,
+    backgroundColor: colors.background,
+    paddingBottom: 112
   },
   endActions: {
     gap: spacing.sm

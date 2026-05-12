@@ -256,7 +256,7 @@ function createMemoryDatabase(): AppDatabase {
         memoryState.sync_queue.push({ id, entity, op, payload, client_updated_at, attempts: 0, last_error: null });
         persistMemoryState();
       } else if (sql.startsWith("update cards set")) {
-        updateCardRow(params);
+        updateCardRow(source, params);
         persistMemoryState();
       } else if (sql.startsWith("delete from sync_queue")) {
         const [id] = params;
@@ -270,7 +270,7 @@ function createMemoryDatabase(): AppDatabase {
       if (sql.includes("from decks")) return sortRows(memoryState.decks) as T[];
       if (sql.includes("from sync_queue")) return [...memoryState.sync_queue] as T[];
       if (sql.includes("from review_logs") && sql.includes("group by")) {
-        return aggregateReviewLogs(Number(params[0] ?? 7)) as T[];
+        return aggregateReviewLogs(String(params[0] ?? "")) as T[];
       }
       if (sql.includes("from cards")) return filterMemoryCards(params) as T[];
       return [];
@@ -318,10 +318,31 @@ function rowFromParams(params: unknown[]): Record<string, unknown> {
   return Object.fromEntries(params.map((value, index) => [`col_${index}`, value]));
 }
 
-function updateCardRow(params: unknown[]): void {
+function updateCardRow(source: string, params: unknown[]): void {
   const id = params.at(-1);
   const row = memoryState.cards.find(card => card.id === id);
   if (!row) return;
+  if (source.includes("scheduled_days = ?") && !source.includes("term = ?")) {
+    const [
+      due_at,
+      scheduled_days,
+      stability,
+      fsrs_difficulty,
+      lapses,
+      difficulty,
+      updated_at
+    ] = params;
+    Object.assign(row, {
+      due_at,
+      scheduled_days,
+      stability,
+      fsrs_difficulty,
+      lapses,
+      difficulty,
+      updated_at
+    });
+    return;
+  }
   const fields = [
     "term",
     "term_type",
@@ -365,16 +386,16 @@ function sortRows(rows: Record<string, unknown>[]): Record<string, unknown>[] {
   return [...rows].sort((a, b) => String(b.updated_at ?? "").localeCompare(String(a.updated_at ?? "")));
 }
 
-function aggregateReviewLogs(limit: number): Record<string, unknown>[] {
+function aggregateReviewLogs(startKey: string): Record<string, unknown>[] {
   const counts = new Map<string, number>();
   for (const row of memoryState.review_logs) {
     const reviewedAt = String(row.reviewed_at ?? row.col_6 ?? "");
     const date = reviewedAt.slice(0, 10);
+    if (startKey && date < startKey) continue;
     if (!date) continue;
     counts.set(date, (counts.get(date) ?? 0) + 1);
   }
   return [...counts.entries()]
     .map(([date, count]) => ({ date, count }))
-    .sort((a, b) => String(b.date).localeCompare(String(a.date)))
-    .slice(0, limit);
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)));
 }

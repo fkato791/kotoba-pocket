@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import type { Card } from "@/domain/models";
 import { colors, spacing } from "@/ui/theme";
 
@@ -17,19 +17,25 @@ const termTypeLabel: Record<Card["term_type"], string> = {
 
 export function CardPreview({ card, onPress }: CardPreviewProps): JSX.Element {
   const status = getCardStatus(card);
+  const imageUri = card.term_image_uri ?? card.meaning_image_uri;
   return (
-    <Pressable accessibilityRole="button" onPress={onPress} style={styles.card}>
+    <Pressable accessibilityRole="button" accessibilityLabel={`${card.term}のカードを開く`} onPress={onPress} style={styles.card}>
       <View style={styles.header}>
-        <Text style={styles.term} numberOfLines={1}>{card.term}</Text>
-        <Text style={[styles.status, status === "苦手" && styles.hardStatus]}>{status}</Text>
-      </View>
-      <View style={styles.metaRow}>
-        <Text style={styles.type}>{termTypeLabel[card.term_type]}</Text>
-        {card.part_of_speech ? <Text style={styles.type}>{card.part_of_speech}</Text> : null}
+        <View style={styles.heading}>
+          <Text style={styles.term} numberOfLines={1}>{card.term}</Text>
+          <View style={styles.metaRow}>
+            <Text style={styles.type}>{termTypeLabel[card.term_type]}</Text>
+            {card.part_of_speech ? <Text style={styles.type}>{card.part_of_speech}</Text> : null}
+          </View>
+        </View>
+        {imageUri ? <Image source={{ uri: imageUri }} style={styles.thumbnail} accessibilityLabel="添付写真" /> : null}
       </View>
       <Text style={styles.meaning} numberOfLines={2}>{card.meaning_ja}</Text>
       {card.note ? <Text style={styles.example} numberOfLines={1}>{card.note}</Text> : null}
-      <Text style={styles.next}>{formatDue(card)}</Text>
+      <View style={styles.footer}>
+        <Text style={[styles.status, status === "苦手" && styles.hardStatus]}>{status}</Text>
+        <Text style={styles.next}>{formatDue(card)}</Text>
+      </View>
     </Pressable>
   );
 }
@@ -46,7 +52,7 @@ function formatDue(card: Card): string {
   const due = new Date(card.due_at);
   const today = new Date();
   if (due.toDateString() === today.toDateString()) return "今日復習";
-  return `次回: ${due.getMonth() + 1}/${due.getDate()}`;
+  return `次回 ${due.getMonth() + 1}/${due.getDate()}`;
 }
 
 const styles = StyleSheet.create({
@@ -63,7 +69,9 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 }
   },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: spacing.sm },
+  heading: { flex: 1, gap: spacing.sm },
   term: { color: colors.text, fontSize: 20, fontWeight: "900", flex: 1 },
+  thumbnail: { width: 56, height: 56, borderRadius: 8, backgroundColor: colors.border },
   metaRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.xs },
   type: {
     color: colors.primary,
@@ -76,6 +84,7 @@ const styles = StyleSheet.create({
   },
   meaning: { color: colors.text, fontSize: 15, lineHeight: 22 },
   example: { color: colors.muted, fontSize: 13, lineHeight: 18 },
+  footer: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: spacing.sm },
   next: { color: colors.muted, fontSize: 12, fontWeight: "700" },
   status: {
     color: colors.success,

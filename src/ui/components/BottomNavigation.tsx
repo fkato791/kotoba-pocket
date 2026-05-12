@@ -25,7 +25,7 @@ export function BottomNavigation(): JSX.Element {
             accessibilityLabel={`${tab.label}へ移動`}
             accessibilityState={{ selected: active }}
             onPress={() => router.push(tab.href)}
-            style={styles.item}
+            style={[styles.item, active && styles.activeItem]}
           >
             <Icon size={20} color={active ? colors.primary : colors.muted} />
             <Text style={[styles.label, active && styles.activeLabel]}>{tab.label}</Text>
@@ -60,6 +60,7 @@ const styles = StyleSheet.create({
     gap: 3,
     borderRadius: 8
   },
+  activeItem: { backgroundColor: "#EFF6FF" },
   label: { color: colors.muted, fontSize: 11, fontWeight: "800" },
   activeLabel: { color: colors.primary }
 });
