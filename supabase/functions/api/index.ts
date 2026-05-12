@@ -9,6 +9,23 @@ type SyncChange = {
   payload: Record<string, unknown>;
 };
 
+type ConflictEntry = {
+  entity: SyncChange["entity"];
+  entity_id: string;
+  field: string | null;
+  local_value: unknown;
+  remote_value: unknown;
+  resolution: "field_merge" | "last_write_wins";
+};
+
+const corsHeaders = {
+  "access-control-allow-origin": "*",
+  "access-control-allow-headers": "authorization, x-client-info, apikey, content-type",
+  "access-control-allow-methods": "GET, POST, PATCH, DELETE, OPTIONS"
+};
+
+const safeMergeFields = new Set(["name", "folder", "color", "is_private", "sort_order", "is_pinned", "is_archived"]);
+
 const tableByEntity: Record<SyncChange["entity"], string> = {
   deck: "decks",
   card: "cards",
@@ -18,6 +35,9 @@ const tableByEntity: Record<SyncChange["entity"], string> = {
 };
 
 serve(async request => {
+  if (request.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: corsHeaders });
+  }
   const url = new URL(request.url);
   if (request.method === "GET" && url.pathname.includes("/public/share/")) {
     return publicShare(url);
@@ -64,24 +84,89 @@ async function push(request: Request, supabase: ReturnType<typeof createClient>,
   const body = await request.json() as { device_id: string; changes: SyncChange[] };
   const accepted: string[] = [];
   const rejected: Array<{ id: string; reason: string }> = [];
+  const conflicts: ConflictEntry[] = [];
 
   for (const change of body.changes) {
     const table = tableByEntity[change.entity];
     const payload = { ...change.payload, user_id: userId };
     const result = change.op === "delete"
       ? await supabase.from(table).update({ deleted_at: change.client_updated_at }).eq("id", payload.id).eq("user_id", userId)
-      : await supabase.from(table).upsert(payload);
+      : await upsertWithConflictMerge(supabase, table, change, payload, userId);
 
     if (result.error) rejected.push({ id: change.client_change_id, reason: result.error.message });
-    else accepted.push(change.client_change_id);
+    else {
+      accepted.push(change.client_change_id);
+      conflicts.push(...result.conflicts);
+    }
+  }
+
+  if (conflicts.length > 0) {
+    await supabase.from("conflict_logs").insert(conflicts.map(conflict => ({
+      user_id: userId,
+      entity: conflict.entity,
+      entity_id: conflict.entity_id,
+      field: conflict.field,
+      local_value: conflict.local_value ?? null,
+      remote_value: conflict.remote_value ?? null,
+      resolution: conflict.resolution
+    })));
   }
 
   return json({
     accepted,
     rejected,
-    conflicts: [],
+    conflicts,
     cursor: new Date().toISOString()
   });
+}
+
+async function upsertWithConflictMerge(
+  supabase: ReturnType<typeof createClient>,
+  table: string,
+  change: SyncChange,
+  payload: Record<string, unknown>,
+  userId: string
+): Promise<{ error: { message: string } | null; conflicts: ConflictEntry[] }> {
+  const conflicts: ConflictEntry[] = [];
+  if (!payload.id) return { error: { message: "Missing payload id" }, conflicts };
+  const existing = await supabase.from(table).select("*").eq("id", payload.id).eq("user_id", userId).maybeSingle();
+  if (existing.error) return { error: existing.error, conflicts };
+
+  let next = payload;
+  if (existing.data && hasUpdatedAt(existing.data) && hasUpdatedAt(payload)) {
+    const remoteWins = String(existing.data.updated_at) > String(payload.updated_at);
+    next = { ...payload };
+    for (const [field, remoteValue] of Object.entries(existing.data)) {
+      if (field === "id" || field === "user_id") continue;
+      const localValue = payload[field];
+      if (Object.is(localValue, remoteValue)) continue;
+      if (safeMergeFields.has(field)) {
+        next[field] = remoteWins ? remoteValue : localValue;
+        conflicts.push(makeConflict(change.entity, String(payload.id), field, localValue, remoteValue, "field_merge"));
+      } else if (remoteWins) {
+        next[field] = remoteValue;
+        conflicts.push(makeConflict(change.entity, String(payload.id), field, localValue, remoteValue, "last_write_wins"));
+      }
+    }
+  }
+
+  const result = await supabase.from(table).upsert(next);
+  return { error: result.error, conflicts };
+}
+
+function hasUpdatedAt(value: Record<string, unknown>): boolean {
+  return typeof value.updated_at === "string";
+}
+
+function makeConflict(
+  entity: SyncChange["entity"],
+  entityId: string,
+  field: string,
+  localValue: unknown,
+  remoteValue: unknown,
+  resolution: ConflictEntry["resolution"]
+): ConflictEntry {
+  return { entity, entity_id: entityId, field, local_value: localValue, remote_value: remoteValue, resolution };
 }
 
 async function pull(url: URL, supabase: ReturnType<typeof createClient>): Promise<Response> {
@@ -185,6 +270,6 @@ function csvCell(value: unknown): string {
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { "content-type": "application/json" }
+    headers: { "content-type": "application/json", ...corsHeaders }
   });
 }

@@ -1,12 +1,25 @@
 import { supabase } from "@/data/remote/supabaseClient";
 import type { QueuedChange } from "@/data/local/syncQueueRepository";
+import * as Linking from "expo-linking";
 
-const baseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ? `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/api` : "";
+const configuredSupabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+const baseUrl = isValidSupabaseUrl(configuredSupabaseUrl) ? `${configuredSupabaseUrl}/functions/v1/api` : "";
 
 export interface PushResponse {
   accepted: string[];
   rejected: { id: string; reason: string }[];
   conflicts: ConflictEntry[];
+  cursor: string;
+}
+
+export interface PullResponse {
+  changes: {
+    decks?: Record<string, unknown>[];
+    cards?: Record<string, unknown>[];
+    tags?: Record<string, unknown>[];
+    review_logs?: Record<string, unknown>[];
+    share_links?: Record<string, unknown>[];
+  };
   cursor: string;
 }
 
@@ -17,6 +30,13 @@ export interface ConflictEntry {
   local_value: unknown;
   remote_value: unknown;
   resolution: "field_merge" | "last_write_wins";
+}
+
+export class AuthRequiredError extends Error {
+  constructor(message = "Sign-in required") {
+    super(message);
+    this.name = "AuthRequiredError";
+  }
 }
 
 export async function requestMagicLink(email: string): Promise<void> {
@@ -34,8 +54,8 @@ export async function logout(): Promise<void> {
 }
 
 export async function pushChanges(deviceId: string, changes: QueuedChange[]): Promise<PushResponse> {
-  const session = await supabase.auth.getSession();
-  if (!session.data.session?.access_token) {
+  const token = await getValidAccessToken();
+  if (!token) {
     return {
       accepted: [],
       rejected: changes.map(change => ({ id: change.id, reason: "Sign-in required" })),
@@ -58,13 +78,14 @@ export async function pushChanges(deviceId: string, changes: QueuedChange[]): Pr
   });
 }
 
-export async function pullChanges(since: string): Promise<unknown> {
+export async function pullChanges(since: string): Promise<PullResponse> {
   return callEdgeFunction(`/v1/sync/pull?since=${encodeURIComponent(since)}`, { method: "GET" });
 }
 
 async function callEdgeFunction<T>(path: string, init: RequestInit): Promise<T> {
-  const session = await supabase.auth.getSession();
-  const token = session.data.session?.access_token;
+  if (!baseUrl) throw new Error("Supabase URL is not configured");
+  const token = await getValidAccessToken();
+  if (!token) throw new AuthRequiredError();
   const response = await fetch(`${baseUrl}${path}`, {
     ...init,
     headers: {
@@ -73,13 +94,34 @@ async function callEdgeFunction<T>(path: string, init: RequestInit): Promise<T> 
       ...init.headers
     }
   });
+  if (response.status === 401) throw new AuthRequiredError("Login session expired");
   if (!response.ok) throw new Error(`API ${response.status}: ${await response.text()}`);
   return (await response.json()) as T;
+}
+
+async function getValidAccessToken(): Promise<string | null> {
+  const session = await supabase.auth.getSession();
+  const current = session.data.session;
+  if (!current?.access_token) return null;
+  const expiresAt = current.expires_at ? current.expires_at * 1000 : null;
+  if (!expiresAt || expiresAt - Date.now() > 60_000) return current.access_token;
+  const refreshed = await supabase.auth.refreshSession();
+  return refreshed.data.session?.access_token ?? null;
+}
+
+function isValidSupabaseUrl(value: string | undefined): value is string {
+  if (!value) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && url.hostname.endsWith(".supabase.co");
+  } catch {
+    return false;
+  }
 }
 
 function getAuthRedirectUrl(): string | undefined {
   if (typeof window !== "undefined") {
     return window.location.origin;
   }
-  return "kotobapocket://";
+  return Linking.createURL("/");
 }

@@ -11,7 +11,8 @@ const memoryState = {
   decks: [] as Record<string, unknown>[],
   cards: [] as Record<string, unknown>[],
   review_logs: [] as Record<string, unknown>[],
-  sync_queue: [] as Record<string, unknown>[]
+  sync_queue: [] as Record<string, unknown>[],
+  sync_state: [] as Record<string, unknown>[]
 };
 const webStorageKey = "kotoba-pocket-web-db";
 
@@ -170,7 +171,7 @@ function createMemoryDatabase(): AppDatabase {
     },
     async runAsync(source, ...params) {
       const sql = source.trim().replace(/\s+/g, " ").toLowerCase();
-      if (sql.startsWith("insert into decks")) {
+      if (sql.startsWith("insert into decks") || sql.startsWith("insert or replace into decks")) {
         const [
           id,
           user_id,
@@ -195,7 +196,7 @@ function createMemoryDatabase(): AppDatabase {
           deleted_at: null
         });
         persistMemoryState();
-      } else if (sql.startsWith("insert into cards")) {
+      } else if (sql.startsWith("insert into cards") || sql.startsWith("insert or replace into cards")) {
         const [
           id,
           user_id,
@@ -249,7 +250,34 @@ function createMemoryDatabase(): AppDatabase {
         });
         persistMemoryState();
       } else if (sql.startsWith("insert into review_logs")) {
-        memoryState.review_logs.push(rowFromParams(params));
+        const [
+          id,
+          user_id,
+          card_id,
+          mode,
+          rating,
+          elapsed_ms,
+          reviewed_at,
+          scheduled_days,
+          stability_snapshot,
+          difficulty_snapshot
+        ] = params;
+        upsert(memoryState.review_logs, {
+          id,
+          user_id,
+          card_id,
+          mode,
+          rating,
+          elapsed_ms,
+          reviewed_at,
+          scheduled_days,
+          stability_snapshot,
+          difficulty_snapshot
+        });
+        persistMemoryState();
+      } else if (sql.startsWith("insert or replace into sync_state")) {
+        const [key, value] = params;
+        upsert(memoryState.sync_state, { id: key, key, value });
         persistMemoryState();
       } else if (sql.startsWith("insert into sync_queue")) {
         const [id, entity, op, payload, client_updated_at] = params;
@@ -257,6 +285,17 @@ function createMemoryDatabase(): AppDatabase {
         persistMemoryState();
       } else if (sql.startsWith("update cards set")) {
         updateCardRow(source, params);
+        persistMemoryState();
+      } else if (sql.startsWith("update decks set")) {
+        updateDeckRow(params);
+        persistMemoryState();
+      } else if (sql.startsWith("update sync_queue set")) {
+        const [last_error, id] = params;
+        const row = memoryState.sync_queue.find(change => change.id === id);
+        if (row) {
+          row.attempts = Number(row.attempts ?? 0) + 1;
+          row.last_error = last_error;
+        }
         persistMemoryState();
       } else if (sql.startsWith("delete from sync_queue")) {
         const [id] = params;
@@ -269,6 +308,7 @@ function createMemoryDatabase(): AppDatabase {
       const sql = source.trim().replace(/\s+/g, " ").toLowerCase();
       if (sql.includes("from decks")) return sortRows(memoryState.decks) as T[];
       if (sql.includes("from sync_queue")) return [...memoryState.sync_queue] as T[];
+      if (sql.includes("from sync_state")) return [...memoryState.sync_state] as T[];
       if (sql.includes("from review_logs") && sql.includes("group by")) {
         return aggregateReviewLogs(String(params[0] ?? "")) as T[];
       }
@@ -279,6 +319,15 @@ function createMemoryDatabase(): AppDatabase {
       const sql = source.trim().replace(/\s+/g, " ").toLowerCase();
       if (sql.includes("from cards")) {
         return (memoryState.cards.find(row => row.id === params[0]) ?? null) as T | null;
+      }
+      if (sql.includes("from decks")) {
+        return (memoryState.decks.find(row => row.id === params[0]) ?? null) as T | null;
+      }
+      if (sql.includes("from sync_state")) {
+        return (memoryState.sync_state.find(row => row.key === params[0]) ?? null) as T | null;
+      }
+      if (sql.includes("from review_logs")) {
+        return (memoryState.review_logs.find(row => row.id === params[0]) ?? null) as T | null;
       }
       return null;
     },
@@ -298,6 +347,7 @@ function hydrateMemoryState(): void {
     memoryState.cards = parsed.cards ?? [];
     memoryState.review_logs = parsed.review_logs ?? [];
     memoryState.sync_queue = parsed.sync_queue ?? [];
+    memoryState.sync_state = parsed.sync_state ?? [];
   } catch {
     window.localStorage.removeItem(webStorageKey);
   }
@@ -312,10 +362,6 @@ function upsert(rows: Record<string, unknown>[], next: Record<string, unknown>):
   const index = rows.findIndex(row => row.id === next.id);
   if (index >= 0) rows[index] = { ...rows[index], ...next };
   else rows.push(next);
-}
-
-function rowFromParams(params: unknown[]): Record<string, unknown> {
-  return Object.fromEntries(params.map((value, index) => [`col_${index}`, value]));
 }
 
 function updateCardRow(source: string, params: unknown[]): void {
@@ -365,6 +411,16 @@ function updateCardRow(source: string, params: unknown[]): void {
     "updated_at",
     "deleted_at"
   ];
+  fields.forEach((field, index) => {
+    row[field] = params[index];
+  });
+}
+
+function updateDeckRow(params: unknown[]): void {
+  const id = params.at(-1);
+  const row = memoryState.decks.find(deck => deck.id === id);
+  if (!row) return;
+  const fields = ["name", "folder", "color", "is_private", "sort_order", "updated_at", "deleted_at"];
   fields.forEach((field, index) => {
     row[field] = params[index];
   });

@@ -9,7 +9,11 @@ export interface MergeableEntity {
 
 const safeMergeFields = new Set(["name", "folder", "color", "is_private", "sort_order", "is_pinned", "is_archived"]);
 
-export function mergeEntity(local: MergeableEntity, remote: MergeableEntity): { merged: MergeableEntity; conflicts: ConflictEntry[] } {
+export function mergeEntity(
+  local: MergeableEntity,
+  remote: MergeableEntity,
+  entity: ConflictEntry["entity"] = "unknown"
+): { merged: MergeableEntity; conflicts: ConflictEntry[] } {
   const merged = { ...local };
   const conflicts: ConflictEntry[] = [];
   const remoteWins = remote.updated_at > local.updated_at;
@@ -20,16 +24,17 @@ export function mergeEntity(local: MergeableEntity, remote: MergeableEntity): { 
     if (Object.is(localValue, remoteValue)) continue;
     if (safeMergeFields.has(field)) {
       merged[field] = remoteWins ? remoteValue : localValue;
-      conflicts.push(makeConflict(local.id, field, localValue, remoteValue, "field_merge"));
+      conflicts.push(makeConflict(entity, local.id, field, localValue, remoteValue, "field_merge"));
     } else if (remoteWins) {
       merged[field] = remoteValue;
-      conflicts.push(makeConflict(local.id, field, localValue, remoteValue, "last_write_wins"));
+      conflicts.push(makeConflict(entity, local.id, field, localValue, remoteValue, "last_write_wins"));
     }
   }
   return { merged, conflicts };
 }
 
 function makeConflict(
+  entity: ConflictEntry["entity"],
   entityId: string,
   field: string,
   localValue: unknown,
@@ -37,7 +42,7 @@ function makeConflict(
   resolution: ConflictEntry["resolution"]
 ): ConflictEntry {
   return {
-    entity: "unknown",
+    entity,
     entity_id: entityId,
     field,
     local_value: localValue,

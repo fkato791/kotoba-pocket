@@ -13,6 +13,15 @@ export async function ensureDefaultDeck(): Promise<Deck> {
   return createDeck({ name: "Inbox", folder: null, color: "#2563EB" });
 }
 
+export async function findOrCreateDeck(name?: string | null): Promise<Deck> {
+  const normalized = name?.trim();
+  if (!normalized) return ensureDefaultDeck();
+  const decks = await listDecks();
+  const existing = decks.find(deck => deck.name.toLowerCase() === normalized.toLowerCase());
+  if (existing) return existing;
+  return createDeck({ name: normalized, folder: null, color: "#2563EB" });
+}
+
 export async function listDecks(): Promise<Deck[]> {
   const db = await getDatabase();
   const rows = await db.getAllAsync<Record<string, unknown>>(

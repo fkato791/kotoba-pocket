@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Alert, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import { router } from "expo-router";
 import * as DocumentPicker from "expo-document-picker";
+import * as FileSystem from "expo-file-system";
 import { ImagePlus, Volume2, X } from "lucide-react-native";
 import { createCard } from "@/data/repositories/cardRepository";
 import { ensureDefaultDeck, listDecks } from "@/data/repositories/deckRepository";
@@ -214,8 +215,20 @@ async function pickImage(setUri: (uri: string) => void, setName: (name: string) 
   if (result.canceled) return;
   const asset = result.assets[0];
   if (!asset) return;
-  setUri(asset.uri);
+  const uri = await persistPickedImage(asset.uri, asset.name);
+  setUri(uri);
   setName(asset.name);
+}
+
+async function persistPickedImage(uri: string, name: string): Promise<string> {
+  if (Platform.OS === "web" || !FileSystem.documentDirectory) return uri;
+  const directory = `${FileSystem.documentDirectory}card-images/`;
+  await FileSystem.makeDirectoryAsync(directory, { intermediates: true }).catch(() => undefined);
+  const extension = name.includes(".") ? name.slice(name.lastIndexOf(".")) : ".jpg";
+  const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}${extension}`;
+  const targetUri = `${directory}${fileName}`;
+  await FileSystem.copyAsync({ from: uri, to: targetUri });
+  return targetUri;
 }
 
 function PhotoPickerRow({

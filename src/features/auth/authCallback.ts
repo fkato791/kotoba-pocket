@@ -1,14 +1,16 @@
 import { supabase } from "@/data/remote/supabaseClient";
+import * as Linking from "expo-linking";
 
-export async function handleAuthCallbackUrl(): Promise<void> {
-  if (typeof window === "undefined") return;
-  const url = new URL(window.location.href);
+export async function handleAuthCallbackUrl(urlString?: string | null): Promise<boolean> {
+  const href = urlString ?? (typeof window !== "undefined" ? window.location.href : await Linking.getInitialURL());
+  if (!href) return false;
+  const url = new URL(href);
   const code = url.searchParams.get("code");
   if (code) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (error) throw error;
     clearAuthParams(url);
-    return;
+    return true;
   }
 
   const hashParams = new URLSearchParams(url.hash.replace(/^#/, ""));
@@ -21,10 +23,13 @@ export async function handleAuthCallbackUrl(): Promise<void> {
     });
     if (error) throw error;
     clearAuthParams(url);
+    return true;
   }
+  return false;
 }
 
 function clearAuthParams(url: URL): void {
+  if (typeof window === "undefined") return;
   url.searchParams.delete("code");
   url.hash = "";
   window.history.replaceState({}, document.title, url.pathname || "/");

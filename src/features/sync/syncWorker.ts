@@ -1,9 +1,13 @@
 import NetInfo from "@react-native-community/netinfo";
-import { pushChanges } from "@/data/remote/apiClient";
+import { AuthRequiredError, pullChanges, pushChanges } from "@/data/remote/apiClient";
+import { supabase } from "@/data/remote/supabaseClient";
+import { applyRemoteChanges } from "@/data/local/remoteChangeRepository";
+import { getSyncCursor, setSyncCursor } from "@/data/local/syncStateRepository";
 import { listQueuedChanges, markQueuedChangeError, removeQueuedChanges } from "@/data/local/syncQueueRepository";
 import { useSyncStore } from "@/features/sync/syncStore";
 
 const DEVICE_ID = "local-device";
+const signInMessage = "ログインすると同期できます。ローカル保存は継続されています。";
 
 class SyncWorker {
   private timer: ReturnType<typeof setInterval> | null = null;
@@ -24,25 +28,55 @@ class SyncWorker {
       useSyncStore.getState().setStatus("offline");
       return;
     }
+
     const changes = await listQueuedChanges();
-    if (changes.length === 0) {
-      useSyncStore.getState().setStatus("synced");
-      return;
-    }
+    useSyncStore.getState().setStats({ pendingCount: changes.length });
     useSyncStore.getState().setStatus("syncing");
+
     try {
-      const response = await pushChanges(DEVICE_ID, changes);
-      if (response.rejected.every(rejected => rejected.reason === "Sign-in required")) {
-        useSyncStore.getState().setStatus("signed_out");
+      const session = await supabase.auth.getSession();
+      if (!session.data.session?.access_token) {
+        useSyncStore.getState().setStatus("signed_out", signInMessage);
         return;
       }
-      await removeQueuedChanges(response.accepted);
-      for (const rejected of response.rejected) {
-        await markQueuedChangeError(rejected.id, rejected.reason);
+
+      if (changes.length > 0) {
+        const response = await pushChanges(DEVICE_ID, changes);
+        if (response.rejected.length > 0 && response.rejected.every(rejected => rejected.reason === "Sign-in required")) {
+          useSyncStore.getState().setStatus("signed_out", signInMessage);
+          return;
+        }
+        await removeQueuedChanges(response.accepted);
+        for (const rejected of response.rejected) {
+          await markQueuedChangeError(rejected.id, rejected.reason);
+        }
+        if (response.conflicts.length > 0) {
+          useSyncStore.getState().setStats({ conflictCount: response.conflicts.length });
+        }
+        if (response.rejected.length > 0) {
+          useSyncStore.getState().setStatus("error", response.rejected.map(item => item.reason).join("\n"));
+          return;
+        }
       }
-      useSyncStore.getState().setCursor(response.cursor);
-      useSyncStore.getState().setStatus(response.rejected.length > 0 ? "error" : "synced");
+
+      const cursor = await getSyncCursor();
+      const pulled = await pullChanges(cursor);
+      const applied = await applyRemoteChanges(pulled);
+      await setSyncCursor(pulled.cursor);
+      useSyncStore.getState().setCursor(pulled.cursor);
+      useSyncStore.getState().setStats({
+        lastSyncedAt: new Date().toISOString(),
+        pendingCount: 0,
+        pulledCount: applied.applied,
+        conflictCount: applied.conflicts
+      });
+      useSyncStore.getState().setStatus("synced");
     } catch (error) {
+      if (error instanceof AuthRequiredError) {
+        await supabase.auth.signOut().catch(() => undefined);
+        useSyncStore.getState().setStatus("signed_out", signInMessage);
+        return;
+      }
       useSyncStore.getState().setStatus("error", error instanceof Error ? error.message : "Sync failed");
     }
   }

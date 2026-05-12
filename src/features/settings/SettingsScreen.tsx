@@ -1,20 +1,32 @@
 import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
 import type { ReactNode } from "react";
-import { requestMagicLink } from "@/data/remote/apiClient";
+import { useEffect, useState } from "react";
+import { logout, requestMagicLink } from "@/data/remote/apiClient";
 import { supabase } from "@/data/remote/supabaseClient";
 import { useSyncStore } from "@/features/sync/syncStore";
+import type { SyncStatus } from "@/features/sync/syncStore";
 import { syncWorker } from "@/features/sync/syncWorker";
 import { AppButton } from "@/ui/components/AppButton";
 import { AppInput } from "@/ui/components/AppInput";
 import { SyncStatusBadge } from "@/ui/components/SyncStatusBadge";
 import { colors, spacing } from "@/ui/theme";
-import { useState } from "react";
 
 export function SettingsScreen(): JSX.Element {
   const [email, setEmail] = useState("");
   const [sessionEmail, setSessionEmail] = useState<string | null>(null);
   const syncStatus = useSyncStore(state => state.status);
   const syncError = useSyncStore(state => state.error);
+  const lastSyncedAt = useSyncStore(state => state.lastSyncedAt);
+  const pulledCount = useSyncStore(state => state.pulledCount);
+  const conflictCount = useSyncStore(state => state.conflictCount);
+
+  useEffect(() => {
+    void refreshSession();
+    const subscription = supabase.auth.onAuthStateChange((_event, session) => {
+      setSessionEmail(session?.user.email ?? null);
+    });
+    return () => subscription.data.subscription.unsubscribe();
+  }, []);
 
   async function refreshSession(): Promise<void> {
     const session = await supabase.auth.getSession();
@@ -23,8 +35,8 @@ export function SettingsScreen(): JSX.Element {
 
   async function sendMagicLink(): Promise<void> {
     try {
-      await requestMagicLink(email);
-      Alert.alert("メールを確認してください", "マジックリンクを送信しました。");
+      await requestMagicLink(email.trim());
+      Alert.alert("メールを確認してください", "新しいマジックリンクを送信しました。古いリンクではなく、今届いたリンクを開いてください。");
     } catch (error) {
       const message = error instanceof Error ? error.message : "送信できませんでした";
       if (message.toLowerCase().includes("rate limit")) {
@@ -35,31 +47,45 @@ export function SettingsScreen(): JSX.Element {
     }
   }
 
+  async function resetLogin(): Promise<void> {
+    await logout().catch(() => undefined);
+    setSessionEmail(null);
+    Alert.alert("ログイン状態をリセットしました", "もう一度マジックリンクを送ってください。");
+  }
+
   return (
     <ScrollView contentContainerStyle={styles.content}>
       <Section title="アカウント">
         <AppInput label="メール" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
-        <AppButton label="マジックリンクを送る" onPress={() => void sendMagicLink()} />
+        <AppButton label="マジックリンクを送る" disabled={!email.trim()} onPress={() => void sendMagicLink()} />
         <AppButton label="ログイン状態を確認" variant="secondary" onPress={() => void refreshSession()} />
+        <AppButton label="ログイン状態をリセット" variant="secondary" onPress={() => void resetLogin()} />
         <Text style={styles.text}>ログイン: {sessionEmail ?? "未ログイン"}</Text>
       </Section>
+
       <Section title="同期">
         <SyncStatusBadge />
-        <Text style={styles.text}>現在の状態: {syncStatus}</Text>
+        <Text style={styles.text}>現在の状態: {syncStatusLabels[syncStatus]}</Text>
+        <Text style={styles.text}>最終同期: {lastSyncedAt ? new Date(lastSyncedAt).toLocaleString("ja-JP") : "未同期"}</Text>
+        <Text style={styles.text}>今回の取得: {pulledCount}件 / 競合: {conflictCount}件</Text>
         {syncError ? <Text style={styles.errorText}>{syncError}</Text> : null}
         <AppButton label="今すぐ同期" variant="secondary" onPress={() => void syncWorker.flush()} />
       </Section>
+
       <Section title="音声">
-        <Text style={styles.text}>ネイティブTTSを優先します。速度設定はレビュー画面へ反映できます。</Text>
+        <Text style={styles.text}>英語の発音は端末のTTSを優先して再生します。</Text>
       </Section>
+
       <Section title="学習">
-        <Text style={styles.text}>復習ボタンは「もう一度 / むずかしい / できた / かんたん」です。</Text>
+        <Text style={styles.text}>復習ボタンは「もう一度 / むずかしい / できた / かんたん」で記録します。</Text>
       </Section>
+
       <Section title="プライバシー">
-        <Text style={styles.text}>デッキは非公開が初期値です。共有リンク作成前に確認を求めます。</Text>
-        <AppButton label="データをエクスポート" variant="secondary" onPress={() => Alert.alert("エクスポート画面から実行できます")} />
+        <Text style={styles.text}>デッキは非公開が初期値です。共有リンクを作る前には確認を求めます。</Text>
+        <AppButton label="データをエクスポート" variant="secondary" onPress={() => Alert.alert("データ画面から実行できます")} />
         <AppButton label="アカウント削除" variant="danger" onPress={() => Alert.alert("確認", "リモートデータ削除APIを呼び出します")} />
       </Section>
+
       <Section title="アプリ言語">
         <Text style={styles.text}>日本語</Text>
       </Section>
@@ -76,8 +102,16 @@ function Section({ title, children }: { title: string; children: ReactNode }): J
   );
 }
 
+const syncStatusLabels: Record<SyncStatus, string> = {
+  offline: "オフライン",
+  syncing: "同期中",
+  synced: "同期済み",
+  signed_out: "ログイン待ち",
+  error: "同期エラー"
+};
+
 const styles = StyleSheet.create({
-  content: { padding: spacing.lg, gap: spacing.md, backgroundColor: colors.background },
+  content: { padding: spacing.lg, gap: spacing.md, backgroundColor: colors.background, paddingBottom: 112 },
   section: {
     padding: spacing.md,
     gap: spacing.md,
@@ -87,7 +121,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface
   },
   title: { color: colors.text, fontSize: 18, fontWeight: "900" },
-  text: { color: colors.text, lineHeight: 22 }
-  ,
+  text: { color: colors.text, lineHeight: 22 },
   errorText: { color: colors.danger, lineHeight: 20 }
 });
