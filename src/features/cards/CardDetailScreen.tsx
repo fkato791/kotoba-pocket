@@ -29,7 +29,9 @@ export function CardDetailScreen(): JSX.Element {
   return (
     <ScrollView contentContainerStyle={styles.content}>
       <AppInput label="英語" value={card.term} onChangeText={term => setCard({ ...card, term })} />
+      {card.term_image_uri ? <Text style={styles.meta}>英語の写真: 添付あり</Text> : null}
       <AppInput label="意味" value={card.meaning_ja} onChangeText={meaning_ja => setCard({ ...card, meaning_ja })} multiline />
+      {card.meaning_image_uri ? <Text style={styles.meta}>意味の写真: 添付あり</Text> : null}
       <AppInput label="メモ" value={card.note ?? ""} onChangeText={note => setCard({ ...card, note })} multiline />
       <View style={styles.row}>
         <Text style={styles.label}>苦手として固定</Text>
@@ -38,6 +40,10 @@ export function CardDetailScreen(): JSX.Element {
       <View style={styles.panel}>
         <Text style={styles.panelTitle}>復習履歴</Text>
         <Text style={styles.meta}>間隔: {card.scheduled_days}日 / 失敗: {card.lapses}回 / 難しさ: {card.difficulty}</Text>
+      </View>
+      <View style={styles.panel}>
+        <Text style={styles.panelTitle}>音声</Text>
+        <Text style={styles.meta}>英語の発音は端末TTSで自動再生できます。</Text>
       </View>
       <AppButton
         label="発音を再生"

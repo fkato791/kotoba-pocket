@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export type SyncStatus = "offline" | "syncing" | "synced" | "error";
+export type SyncStatus = "offline" | "syncing" | "synced" | "signed_out" | "error";
 
 interface SyncState {
   status: SyncStatus;

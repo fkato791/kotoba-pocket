@@ -9,6 +9,8 @@ const baseCard: Card = {
   term: "meticulous",
   term_type: "word",
   meaning_ja: "注意深い",
+  term_image_uri: null,
+  meaning_image_uri: null,
   part_of_speech: null,
   ipa: null,
   note: null,

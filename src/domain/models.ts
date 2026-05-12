@@ -52,6 +52,8 @@ export interface Card {
   term: string;
   term_type: TermType;
   meaning_ja: string;
+  term_image_uri: string | null;
+  meaning_image_uri: string | null;
   part_of_speech: string | null;
   ipa: string | null;
   note: string | null;

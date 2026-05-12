@@ -23,6 +23,8 @@ export function mapCard(row: Record<string, unknown>): Card {
     term: String(row.term),
     term_type: row.term_type as Card["term_type"],
     meaning_ja: String(row.meaning_ja),
+    term_image_uri: nullableString(row.term_image_uri),
+    meaning_image_uri: nullableString(row.meaning_image_uri),
     part_of_speech: nullableString(row.part_of_speech),
     ipa: nullableString(row.ipa),
     note: nullableString(row.note),

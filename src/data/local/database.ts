@@ -13,6 +13,7 @@ const memoryState = {
   review_logs: [] as Record<string, unknown>[],
   sync_queue: [] as Record<string, unknown>[]
 };
+const webStorageKey = "kotoba-pocket-web-db";
 
 export function getDatabase(): Promise<AppDatabase> {
   dbPromise ??= isWebRuntime()
@@ -50,6 +51,8 @@ export async function initializeDatabase(): Promise<void> {
       term TEXT NOT NULL,
       term_type TEXT NOT NULL,
       meaning_ja TEXT NOT NULL,
+      term_image_uri TEXT,
+      meaning_image_uri TEXT,
       part_of_speech TEXT,
       ipa TEXT,
       note TEXT,
@@ -143,6 +146,16 @@ export async function initializeDatabase(): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_cards_search ON cards(term, meaning_ja);
     CREATE INDEX IF NOT EXISTS idx_sync_queue_created ON sync_queue(client_updated_at);
   `);
+  await addColumnIfMissing(db, "cards", "term_image_uri TEXT");
+  await addColumnIfMissing(db, "cards", "meaning_image_uri TEXT");
+}
+
+async function addColumnIfMissing(db: AppDatabase, table: string, definition: string): Promise<void> {
+  try {
+    await db.runAsync(`ALTER TABLE ${table} ADD COLUMN ${definition}`);
+  } catch {
+    // Existing installs may already have the column; SQLite has limited ADD COLUMN guards.
+  }
 }
 
 function isWebRuntime(): boolean {
@@ -150,6 +163,7 @@ function isWebRuntime(): boolean {
 }
 
 function createMemoryDatabase(): AppDatabase {
+  hydrateMemoryState();
   return {
     async execAsync() {
       return;
@@ -180,6 +194,7 @@ function createMemoryDatabase(): AppDatabase {
           updated_at,
           deleted_at: null
         });
+        persistMemoryState();
       } else if (sql.startsWith("insert into cards")) {
         const [
           id,
@@ -188,6 +203,8 @@ function createMemoryDatabase(): AppDatabase {
           term,
           term_type,
           meaning_ja,
+          term_image_uri,
+          meaning_image_uri,
           part_of_speech,
           ipa,
           note,
@@ -211,6 +228,8 @@ function createMemoryDatabase(): AppDatabase {
           term,
           term_type,
           meaning_ja,
+          term_image_uri,
+          meaning_image_uri,
           part_of_speech,
           ipa,
           note,
@@ -228,16 +247,21 @@ function createMemoryDatabase(): AppDatabase {
           updated_at,
           deleted_at: null
         });
+        persistMemoryState();
       } else if (sql.startsWith("insert into review_logs")) {
         memoryState.review_logs.push(rowFromParams(params));
+        persistMemoryState();
       } else if (sql.startsWith("insert into sync_queue")) {
         const [id, entity, op, payload, client_updated_at] = params;
         memoryState.sync_queue.push({ id, entity, op, payload, client_updated_at, attempts: 0, last_error: null });
+        persistMemoryState();
       } else if (sql.startsWith("update cards set")) {
         updateCardRow(params);
+        persistMemoryState();
       } else if (sql.startsWith("delete from sync_queue")) {
         const [id] = params;
         memoryState.sync_queue = memoryState.sync_queue.filter(row => row.id !== id);
+        persistMemoryState();
       }
       return {};
     },
@@ -245,6 +269,9 @@ function createMemoryDatabase(): AppDatabase {
       const sql = source.trim().replace(/\s+/g, " ").toLowerCase();
       if (sql.includes("from decks")) return sortRows(memoryState.decks) as T[];
       if (sql.includes("from sync_queue")) return [...memoryState.sync_queue] as T[];
+      if (sql.includes("from review_logs") && sql.includes("group by")) {
+        return aggregateReviewLogs(Number(params[0] ?? 7)) as T[];
+      }
       if (sql.includes("from cards")) return filterMemoryCards(params) as T[];
       return [];
     },
@@ -259,6 +286,26 @@ function createMemoryDatabase(): AppDatabase {
       await task();
     }
   };
+}
+
+function hydrateMemoryState(): void {
+  if (!isWebRuntime()) return;
+  const stored = window.localStorage.getItem(webStorageKey);
+  if (!stored) return;
+  try {
+    const parsed = JSON.parse(stored) as typeof memoryState;
+    memoryState.decks = parsed.decks ?? [];
+    memoryState.cards = parsed.cards ?? [];
+    memoryState.review_logs = parsed.review_logs ?? [];
+    memoryState.sync_queue = parsed.sync_queue ?? [];
+  } catch {
+    window.localStorage.removeItem(webStorageKey);
+  }
+}
+
+function persistMemoryState(): void {
+  if (!isWebRuntime()) return;
+  window.localStorage.setItem(webStorageKey, JSON.stringify(memoryState));
 }
 
 function upsert(rows: Record<string, unknown>[], next: Record<string, unknown>): void {
@@ -279,6 +326,8 @@ function updateCardRow(params: unknown[]): void {
     "term",
     "term_type",
     "meaning_ja",
+    "term_image_uri",
+    "meaning_image_uri",
     "part_of_speech",
     "ipa",
     "note",
@@ -314,4 +363,18 @@ function filterMemoryCards(params: unknown[]): Record<string, unknown>[] {
 
 function sortRows(rows: Record<string, unknown>[]): Record<string, unknown>[] {
   return [...rows].sort((a, b) => String(b.updated_at ?? "").localeCompare(String(a.updated_at ?? "")));
+}
+
+function aggregateReviewLogs(limit: number): Record<string, unknown>[] {
+  const counts = new Map<string, number>();
+  for (const row of memoryState.review_logs) {
+    const reviewedAt = String(row.reviewed_at ?? row.col_6 ?? "");
+    const date = reviewedAt.slice(0, 10);
+    if (!date) continue;
+    counts.set(date, (counts.get(date) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .map(([date, count]) => ({ date, count }))
+    .sort((a, b) => String(b.date).localeCompare(String(a.date)))
+    .slice(0, limit);
 }

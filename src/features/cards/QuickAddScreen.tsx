@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import { router } from "expo-router";
+import * as DocumentPicker from "expo-document-picker";
+import { ImagePlus, X } from "lucide-react-native";
 import { createCard } from "@/data/repositories/cardRepository";
 import { ensureDefaultDeck, listDecks } from "@/data/repositories/deckRepository";
 import type { Deck, TermType } from "@/domain/models";
@@ -22,9 +24,14 @@ const termTypes: { label: string; value: TermType }[] = [
 
 export function QuickAddScreen(): JSX.Element {
   const [decks, setDecks] = useState<Deck[]>([]);
-  const [deckId, setDeckId] = useState("");
+  const [deckIds, setDeckIds] = useState<string[]>([]);
   const [term, setTerm] = useState("");
   const [meaningJa, setMeaningJa] = useState("");
+  const [termImageUri, setTermImageUri] = useState("");
+  const [termImageName, setTermImageName] = useState("");
+  const [meaningImageUri, setMeaningImageUri] = useState("");
+  const [meaningImageName, setMeaningImageName] = useState("");
+  const [autoPronunciation, setAutoPronunciation] = useState(true);
   const [termType, setTermType] = useState<TermType>("word");
   const [advanced, setAdvanced] = useState(false);
   const [partOfSpeech, setPartOfSpeech] = useState("");
@@ -37,15 +44,22 @@ export function QuickAddScreen(): JSX.Element {
 
   useEffect(() => {
     void ensureDefaultDeck().then(deck => {
-      setDeckId(deck.id);
+      setDeckIds([deck.id]);
       return listDecks().then(setDecks);
     });
   }, []);
 
   async function save(addNext: boolean): Promise<void> {
-    const parsed = quickAddCardSchema.safeParse({
+    if (deckIds.length === 0) {
+      Alert.alert("デッキを選択してください", "少なくとも1つのデッキを選んでください。");
+      return;
+    }
+    const parsed = quickAddCardSchema.omit({ deck_id: true }).safeParse({
       term,
       meaning_ja: meaningJa,
+      term_image_uri: termImageUri,
+      meaning_image_uri: meaningImageUri,
+      auto_pronunciation: autoPronunciation,
       term_type: termType,
       part_of_speech: partOfSpeech,
       example_sentence_en: exampleEn,
@@ -53,8 +67,7 @@ export function QuickAddScreen(): JSX.Element {
       note,
       source_text: sourceText,
       source_url: sourceUrl,
-      tags: [],
-      deck_id: deckId
+      tags: []
     });
     if (!parsed.success) {
       Alert.alert("入力を確認してください", parsed.error.issues[0]?.message ?? "保存できませんでした");
@@ -65,11 +78,16 @@ export function QuickAddScreen(): JSX.Element {
     }
     setSaving(true);
     try {
-      await createCard(parsed.data);
+      await Promise.all(deckIds.map(deck_id => createCard({ ...parsed.data, deck_id })));
       analytics.track("card_created", { term_type: termType });
       if (addNext) {
         setTerm("");
         setMeaningJa("");
+        setTermImageUri("");
+        setTermImageName("");
+        setMeaningImageUri("");
+        setMeaningImageName("");
+        setAutoPronunciation(true);
         setExampleEn("");
         setExampleJa("");
         setNote("");
@@ -87,17 +105,47 @@ export function QuickAddScreen(): JSX.Element {
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <AppInput label="英語" value={term} onChangeText={setTerm} placeholder="take it for granted" autoFocus />
+        <PhotoPickerRow
+          label="英語の写真"
+          fileName={termImageName}
+          onPick={() => void pickImage(setTermImageUri, setTermImageName)}
+          onClear={() => {
+            setTermImageUri("");
+            setTermImageName("");
+          }}
+        />
         <AppInput label="意味" value={meaningJa} onChangeText={setMeaningJa} placeholder="当然だと思う" />
+        <PhotoPickerRow
+          label="意味の写真"
+          fileName={meaningImageName}
+          onPick={() => void pickImage(setMeaningImageUri, setMeaningImageName)}
+          onClear={() => {
+            setMeaningImageUri("");
+            setMeaningImageName("");
+          }}
+        />
+        <View style={styles.row}>
+          <View style={styles.switchText}>
+            <Text style={styles.label}>発音音声を自動追加</Text>
+            <Text style={styles.helperText}>英語の入力から端末TTSで再生します</Text>
+          </View>
+          <Switch value={autoPronunciation} onValueChange={setAutoPronunciation} />
+        </View>
         <Text style={styles.label}>種類</Text>
         <View style={styles.wrapRow}>
           {termTypes.map(item => (
             <Chip key={item.value} label={item.label} selected={termType === item.value} onPress={() => setTermType(item.value)} />
           ))}
         </View>
-        <Text style={styles.label}>デッキ</Text>
+        <Text style={styles.label}>デッキ（複数選択可）</Text>
         <View style={styles.wrapRow}>
           {decks.map(deck => (
-            <Chip key={deck.id} label={deck.name} selected={deck.id === deckId} onPress={() => setDeckId(deck.id)} />
+            <Chip
+              key={deck.id}
+              label={deck.name}
+              selected={deckIds.includes(deck.id)}
+              onPress={() => setDeckIds(current => toggleDeck(current, deck.id))}
+            />
           ))}
         </View>
         <View style={styles.row}>
@@ -123,12 +171,74 @@ export function QuickAddScreen(): JSX.Element {
   );
 }
 
+function toggleDeck(current: string[], deckId: string): string[] {
+  if (current.includes(deckId)) {
+    return current.filter(id => id !== deckId);
+  }
+  return [...current, deckId];
+}
+
+async function pickImage(setUri: (uri: string) => void, setName: (name: string) => void): Promise<void> {
+  const result = await DocumentPicker.getDocumentAsync({
+    type: "image/*",
+    copyToCacheDirectory: true,
+    multiple: false
+  });
+  if (result.canceled) return;
+  const asset = result.assets[0];
+  if (!asset) return;
+  setUri(asset.uri);
+  setName(asset.name);
+}
+
+function PhotoPickerRow({
+  label,
+  fileName,
+  onPick,
+  onClear
+}: {
+  label: string;
+  fileName: string;
+  onPick: () => void;
+  onClear: () => void;
+}): JSX.Element {
+  return (
+    <View style={styles.photoRow}>
+      <View style={styles.photoText}>
+        <Text style={styles.label}>{label}</Text>
+        <Text style={styles.photoName} numberOfLines={1}>{fileName || "未選択"}</Text>
+      </View>
+      {fileName ? (
+        <AppButton label="削除" variant="secondary" icon={<X size={16} color={colors.text} />} onPress={onClear} />
+      ) : (
+        <AppButton label="追加" variant="secondary" icon={<ImagePlus size={16} color={colors.text} />} onPress={onPick} />
+      )}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   content: { padding: spacing.lg, gap: spacing.md, paddingBottom: 140 },
   label: { color: colors.text, fontWeight: "800" },
   wrapRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+  photoRow: {
+    minHeight: 56,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    padding: spacing.md,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacing.md
+  },
+  photoText: { flex: 1, gap: spacing.xs },
+  photoName: { color: colors.muted, fontSize: 13 },
   row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  switchText: { flex: 1, gap: spacing.xs },
+  helperText: { color: colors.muted, fontSize: 13 },
   advanced: { gap: spacing.md },
   footer: {
     position: "absolute",

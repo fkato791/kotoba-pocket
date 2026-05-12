@@ -32,6 +32,10 @@ class SyncWorker {
     useSyncStore.getState().setStatus("syncing");
     try {
       const response = await pushChanges(DEVICE_ID, changes);
+      if (response.rejected.every(rejected => rejected.reason === "Sign-in required")) {
+        useSyncStore.getState().setStatus("signed_out");
+        return;
+      }
       await removeQueuedChanges(response.accepted);
       for (const rejected of response.rejected) {
         await markQueuedChangeError(rejected.id, rejected.reason);

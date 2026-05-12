@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { FlatList, ScrollView, StyleSheet, View } from "react-native";
+import { FlatList, ScrollView, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 import { listCards } from "@/data/repositories/cardRepository";
 import type { Card } from "@/domain/models";
@@ -26,16 +26,20 @@ export function CollectionScreen(): JSX.Element {
 
   return (
     <View style={styles.screen}>
+      <View style={styles.header}>
+        <Text style={styles.title}>単語</Text>
+        <Text style={styles.subtitle}>保存した英語を探して整理できます。</Text>
+      </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs}>
-        <Chip label="Decks" selected={tab === "decks"} onPress={() => setTab("decks")} />
-        <Chip label="Tags" selected={tab === "tags"} onPress={() => setTab("tags")} />
-        <Chip label="All cards" selected={tab === "all"} onPress={() => setTab("all")} />
+        <Chip label="デッキ" selected={tab === "decks"} onPress={() => setTab("decks")} />
+        <Chip label="タグ" selected={tab === "tags"} onPress={() => setTab("tags")} />
+        <Chip label="すべて" selected={tab === "all"} onPress={() => setTab("all")} />
       </ScrollView>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs}>
-        <Chip label="updated" selected />
-        <Chip label="due" selected={filter === "due"} onPress={() => setFilter("due")} />
-        <Chip label="hardest" selected={filter === "difficult"} onPress={() => setFilter("difficult")} />
-        <Chip label="idiom-only" selected={filter === "idiom"} onPress={() => setFilter("idiom")} />
+        <Chip label="更新順" selected={filter === "all"} onPress={() => setFilter("all")} />
+        <Chip label="復習" selected={filter === "due"} onPress={() => setFilter("due")} />
+        <Chip label="苦手" selected={filter === "difficult"} onPress={() => setFilter("difficult")} />
+        <Chip label="イディオム" selected={filter === "idiom"} onPress={() => setFilter("idiom")} />
       </ScrollView>
       <FlatList
         data={cards}
@@ -43,7 +47,14 @@ export function CollectionScreen(): JSX.Element {
         keyExtractor={item => item.id}
         ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
         renderItem={({ item }) => <CardPreview card={item} onPress={() => router.push(`/card/${item.id}`)} />}
-        ListEmptyComponent={<EmptyState title="カードがありません" />}
+        ListEmptyComponent={
+          <EmptyState
+            title="まだ単語がありません"
+            description="気になった英語を追加すると、ここで見返せます。"
+            actionLabel="単語を追加"
+            onAction={() => router.push("/quick-add")}
+          />
+        }
       />
     </View>
   );
@@ -51,6 +62,9 @@ export function CollectionScreen(): JSX.Element {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
+  header: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg, gap: spacing.xs },
+  title: { color: colors.text, fontSize: 26, fontWeight: "900" },
+  subtitle: { color: colors.muted, fontSize: 14 },
   tabs: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, gap: spacing.sm },
-  list: { padding: spacing.lg }
+  list: { padding: spacing.lg, paddingBottom: 112 }
 });

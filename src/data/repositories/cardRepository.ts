@@ -19,6 +19,11 @@ export interface CardFilters {
   term_type?: TermType;
 }
 
+export interface DailyReviewCount {
+  date: string;
+  count: number;
+}
+
 export async function createCard(input: QuickAddCardInput): Promise<Card> {
   const db = await getDatabase();
   const timestamp = nowIso();
@@ -29,6 +34,8 @@ export async function createCard(input: QuickAddCardInput): Promise<Card> {
     term: input.term,
     term_type: input.term_type,
     meaning_ja: input.meaning_ja,
+    term_image_uri: input.term_image_uri || null,
+    meaning_image_uri: input.meaning_image_uri || null,
     part_of_speech: input.part_of_speech || null,
     ipa: null,
     note: input.note || null,
@@ -50,16 +57,18 @@ export async function createCard(input: QuickAddCardInput): Promise<Card> {
   await db.withTransactionAsync(async () => {
     await db.runAsync(
       `INSERT INTO cards (
-        id, user_id, deck_id, term, term_type, meaning_ja, part_of_speech, ipa, note,
+        id, user_id, deck_id, term, term_type, meaning_ja, term_image_uri, meaning_image_uri, part_of_speech, ipa, note,
         source_text, source_url, difficulty, is_pinned, is_archived, due_at,
         scheduled_days, stability, fsrs_difficulty, lapses, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       card.id,
       card.user_id,
       card.deck_id,
       card.term,
       card.term_type,
       card.meaning_ja,
+      card.term_image_uri,
+      card.meaning_image_uri,
       card.part_of_speech,
       card.ipa,
       card.note,
@@ -87,9 +96,23 @@ export async function createCard(input: QuickAddCardInput): Promise<Card> {
         0
       );
     }
+    if (input.auto_pronunciation) {
+      await db.runAsync(
+        "INSERT INTO pronunciation_assets (id, card_id, provider, audio_uri, created_at) VALUES (?, ?, ?, ?, ?)",
+        createId(),
+        card.id,
+        "native_tts",
+        makeNativeTtsUri(card.term),
+        timestamp
+      );
+    }
   });
   await enqueueChange("card", "upsert", card as unknown as Record<string, unknown>);
   return card;
+}
+
+function makeNativeTtsUri(term: string): string {
+  return `tts://native/en-US/${encodeURIComponent(term)}`;
 }
 
 export async function listCards(filters: CardFilters = {}): Promise<Card[]> {
@@ -147,13 +170,15 @@ export async function updateCard(id: string, patch: Partial<Card>): Promise<Card
   const next = { ...current, ...patch, updated_at: nowIso() };
   const db = await getDatabase();
   await db.runAsync(
-    `UPDATE cards SET term = ?, term_type = ?, meaning_ja = ?, part_of_speech = ?, ipa = ?, note = ?,
+    `UPDATE cards SET term = ?, term_type = ?, meaning_ja = ?, term_image_uri = ?, meaning_image_uri = ?, part_of_speech = ?, ipa = ?, note = ?,
       source_text = ?, source_url = ?, difficulty = ?, is_pinned = ?, is_archived = ?, due_at = ?,
       scheduled_days = ?, stability = ?, fsrs_difficulty = ?, lapses = ?, updated_at = ?, deleted_at = ?
       WHERE id = ?`,
     next.term,
     next.term_type,
     next.meaning_ja,
+    next.term_image_uri,
+    next.meaning_image_uri,
     next.part_of_speech,
     next.ipa,
     next.note,
@@ -232,4 +257,26 @@ export async function recordReview(card: Card, mode: ReviewMode, rating: ReviewR
   });
   await enqueueChange("review_log", "upsert", log as unknown as Record<string, unknown>);
   return log;
+}
+
+export async function listDailyReviewCounts(days = 7): Promise<DailyReviewCount[]> {
+  const db = await getDatabase();
+  const start = new Date();
+  start.setDate(start.getDate() - (days - 1));
+  const startKey = start.toISOString().slice(0, 10);
+  const rows = await db.getAllAsync<Record<string, unknown>>(
+    `SELECT substr(reviewed_at, 1, 10) AS date, COUNT(*) AS count
+      FROM review_logs
+      WHERE substr(reviewed_at, 1, 10) >= ?
+      GROUP BY substr(reviewed_at, 1, 10)
+      ORDER BY date ASC`,
+    startKey
+  );
+  const counts = new Map(rows.map(row => [String(row.date), Number(row.count)]));
+  return Array.from({ length: days }, (_, index) => {
+    const date = new Date();
+    date.setDate(date.getDate() - (days - index - 1));
+    const key = date.toISOString().slice(0, 10);
+    return { date: key, count: counts.get(key) ?? 0 };
+  });
 }

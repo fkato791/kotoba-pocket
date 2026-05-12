@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { StyleSheet, Text, TextInput, View } from "react-native";
+import { router } from "expo-router";
 import { listCards, recordReview } from "@/data/repositories/cardRepository";
 import type { Card, ReviewMode, ReviewRating } from "@/domain/models";
 import { checkTypingRecall } from "@/features/review/modes";
@@ -50,7 +51,19 @@ export function ReviewSessionScreen(): JSX.Element {
   }
 
   if (!card) {
-    return <EmptyState title={completed > 0 ? "おつかれさまです" : "今日の復習はありません"} description={`${completed}枚を復習しました`} />;
+    return (
+      <View style={styles.screen}>
+        <EmptyState
+          title={completed > 0 ? "おつかれさまです" : "今日の復習はありません"}
+          description={`${completed}枚を復習しました`}
+        />
+        <View style={styles.endActions}>
+          <AppButton label="ホームへ" onPress={() => router.replace("/")} />
+          <AppButton label="コレクション" variant="secondary" onPress={() => router.push("/collection")} />
+          <AppButton label="単語を追加" variant="secondary" onPress={() => router.push("/quick-add")} />
+        </View>
+      </View>
+    );
   }
 
   return (
@@ -141,5 +154,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     fontSize: 18,
     backgroundColor: colors.background
+  },
+  endActions: {
+    gap: spacing.sm
   }
 });

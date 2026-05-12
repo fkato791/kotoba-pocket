@@ -55,6 +55,8 @@ create table public.cards (
   term text not null,
   term_type term_type not null default 'word',
   meaning_ja text not null,
+  term_image_uri text,
+  meaning_image_uri text,
   part_of_speech text,
   ipa text,
   note text,

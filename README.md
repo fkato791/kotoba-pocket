@@ -88,6 +88,7 @@ pronunciation-assets
 
 The app already wraps these calls behind `src/data/remote/apiClient.ts`.
 See `docs/api.md` for the full REST contract.
+See `docs/supabase-setup.md` for step-by-step Supabase setup.
 
 ## Local-First Behavior
 

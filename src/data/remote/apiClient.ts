@@ -20,7 +20,11 @@ export interface ConflictEntry {
 }
 
 export async function requestMagicLink(email: string): Promise<void> {
-  const { error } = await supabase.auth.signInWithOtp({ email });
+  const redirectTo = getAuthRedirectUrl();
+  const { error } = await supabase.auth.signInWithOtp({
+    email,
+    ...(redirectTo ? { options: { emailRedirectTo: redirectTo } } : {})
+  });
   if (error) throw error;
 }
 
@@ -30,6 +34,15 @@ export async function logout(): Promise<void> {
 }
 
 export async function pushChanges(deviceId: string, changes: QueuedChange[]): Promise<PushResponse> {
+  const session = await supabase.auth.getSession();
+  if (!session.data.session?.access_token) {
+    return {
+      accepted: [],
+      rejected: changes.map(change => ({ id: change.id, reason: "Sign-in required" })),
+      conflicts: [],
+      cursor: new Date().toISOString()
+    };
+  }
   return callEdgeFunction<PushResponse>("/v1/sync/push", {
     method: "POST",
     body: JSON.stringify({
@@ -62,4 +75,11 @@ async function callEdgeFunction<T>(path: string, init: RequestInit): Promise<T> 
   });
   if (!response.ok) throw new Error(`API ${response.status}: ${await response.text()}`);
   return (await response.json()) as T;
+}
+
+function getAuthRedirectUrl(): string | undefined {
+  if (typeof window !== "undefined") {
+    return window.location.origin;
+  }
+  return "kotobapocket://";
 }

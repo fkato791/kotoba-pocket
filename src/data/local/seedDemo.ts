@@ -10,6 +10,7 @@ export async function seedDemoContent(): Promise<void> {
     term: "take it for granted",
     meaning_ja: "当然だと思う",
     term_type: "idiom",
+    auto_pronunciation: true,
     part_of_speech: "phrase",
     example_sentence_en: "Do not take your friends for granted.",
     example_sentence_ja: "友達を当たり前だと思わないで。",
