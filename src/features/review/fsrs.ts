@@ -1,5 +1,6 @@
 import { addDaysIso } from "@/lib/time";
 import type { ReviewRating } from "@/domain/models";
+import { getReviewPaceMultiplier } from "@/features/review/reviewPreferences";
 
 export interface FsrsState {
   stability: number | null;
@@ -29,7 +30,7 @@ export function scheduleReview(state: FsrsState, rating: ReviewRating, reviewedA
   const stability = firstReview
     ? initialStability(score)
     : nextStability(previousStability, difficulty, score);
-  const scheduledDays = rating === "again" ? 0 : Math.max(1, Math.round(stability));
+  const scheduledDays = rating === "again" ? 0 : Math.max(1, Math.round(stability * getReviewPaceMultiplier()));
 
   return {
     stability,

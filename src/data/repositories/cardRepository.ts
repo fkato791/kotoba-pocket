@@ -200,6 +200,27 @@ export async function updateCard(id: string, patch: Partial<Card>): Promise<Card
   return next;
 }
 
+export async function deleteCards(ids: string[]): Promise<number> {
+  if (ids.length === 0) return 0;
+  const db = await getDatabase();
+  const deletedAt = nowIso();
+  let deleted = 0;
+  const queuedPayloads: Record<string, unknown>[] = [];
+  await db.withTransactionAsync(async () => {
+    for (const id of ids) {
+      const current = await db.getFirstAsync<Record<string, unknown>>("SELECT * FROM cards WHERE id = ? AND deleted_at IS NULL", id);
+      if (!current) continue;
+      await db.runAsync("UPDATE cards SET deleted_at = ?, updated_at = ? WHERE id = ?", deletedAt, deletedAt, id);
+      queuedPayloads.push({ ...current, deleted_at: deletedAt, updated_at: deletedAt });
+      deleted += 1;
+    }
+  });
+  for (const payload of queuedPayloads) {
+    await enqueueChange("card", "delete", payload);
+  }
+  return deleted;
+}
+
 export async function recordReview(card: Card, mode: ReviewMode, rating: ReviewRating, elapsedMs: number): Promise<ReviewLog> {
   const reviewedAt = nowIso();
   const scheduled = scheduleReview(

@@ -13,7 +13,7 @@ import { ReviewRatingBar } from "@/ui/components/ReviewRatingBar";
 import { colors, spacing } from "@/ui/theme";
 
 const modeLabels: Record<ReviewMode, string> = {
-  flashcard: "カード",
+  flashcard: "単語カード",
   mcq: "選択",
   cloze: "穴埋め",
   typing: "入力"
@@ -89,14 +89,14 @@ export function ReviewSessionScreen(): JSX.Element {
         />
         <View style={styles.summaryPanel}>
           <Text style={styles.summaryTitle}>セッション結果</Text>
-          <Text style={styles.summaryText}>復習したカード: {completed}件</Text>
+          <Text style={styles.summaryText}>復習した単語カード: {completed}件</Text>
           <Text style={styles.summaryText}>時間: {formatElapsed(now - startedAt)}</Text>
           <Text style={styles.summaryText}>設定: {preset.label}</Text>
         </View>
         <View style={styles.endActions}>
           <AppButton label="もう一度復習" variant="secondary" onPress={resetSession} />
           <AppButton label="ホームへ戻る" onPress={() => router.replace("/")} />
-          <AppButton label="コレクションを見る" variant="secondary" onPress={() => router.push("/collection")} />
+          <AppButton label="単語帳を見る" variant="secondary" onPress={() => router.push("/collection")} />
           <AppButton label="学習記録を見る" variant="secondary" onPress={() => router.push("/study-stats")} />
         </View>
       </ScrollView>

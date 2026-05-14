@@ -24,9 +24,9 @@ export default function RootLayout(): JSX.Element {
         >
           <Stack.Screen name="index" options={{ title: "ホーム" }} />
           <Stack.Screen name="quick-add" options={{ title: "単語を追加", presentation: "modal" }} />
-          <Stack.Screen name="card/[id]" options={{ title: "カード編集" }} />
+          <Stack.Screen name="card/[id]" options={{ title: "単語カード編集" }} />
           <Stack.Screen name="review" options={{ title: "復習" }} />
-          <Stack.Screen name="collection" options={{ title: "単語" }} />
+          <Stack.Screen name="collection" options={{ title: "単語帳" }} />
           <Stack.Screen name="study-stats" options={{ title: "学習記録" }} />
           <Stack.Screen name="import-export" options={{ title: "データ" }} />
           <Stack.Screen name="settings" options={{ title: "設定" }} />

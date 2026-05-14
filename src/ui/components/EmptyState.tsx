@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from "react-native";
 import { AppButton } from "@/ui/components/AppButton";
-import { colors, spacing } from "@/ui/theme";
+import { colors, isClassicWindows, spacing } from "@/ui/theme";
 
 interface EmptyStateProps {
   title: string;
@@ -27,14 +27,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.md,
     backgroundColor: colors.surface,
-    borderRadius: 8,
+    borderRadius: isClassicWindows ? 0 : 8,
     borderWidth: 1,
     borderColor: colors.border
   },
   icon: {
     width: 52,
     height: 52,
-    borderRadius: 26,
+    borderRadius: isClassicWindows ? 0 : 26,
     backgroundColor: colors.primarySoft,
     alignItems: "center",
     justifyContent: "center"

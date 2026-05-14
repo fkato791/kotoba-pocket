@@ -5,7 +5,7 @@ import { colors, spacing } from "@/ui/theme";
 
 const tabs = [
   { label: "ホーム", href: "/", icon: Home },
-  { label: "単語", href: "/collection", icon: BookOpen },
+  { label: "単語帳", href: "/collection", icon: BookOpen },
   { label: "復習", href: "/review", icon: RotateCcw },
   { label: "データ", href: "/import-export", icon: Database },
   { label: "設定", href: "/settings", icon: Settings }

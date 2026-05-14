@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text } from "react-native";
-import { colors, spacing } from "@/ui/theme";
+import { colors, isClassicWindows, spacing } from "@/ui/theme";
 
 interface ChipProps {
   label: string;
@@ -24,13 +24,21 @@ export function Chip({ label, selected = false, onPress }: ChipProps): JSX.Eleme
 const styles = StyleSheet.create({
   chip: {
     minHeight: 40,
-    borderRadius: 18,
+    borderRadius: isClassicWindows ? 0 : 18,
     paddingHorizontal: spacing.md,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: colors.chip,
     borderWidth: 1,
-    borderColor: "transparent"
+    borderColor: isClassicWindows ? colors.border : "transparent",
+    ...(isClassicWindows
+      ? {
+          borderTopColor: "#FFFFFF",
+          borderLeftColor: "#FFFFFF",
+          borderRightColor: "#404040",
+          borderBottomColor: "#404040"
+        }
+      : {})
   },
   selected: { backgroundColor: colors.primary, borderColor: colors.primary },
   label: { color: colors.text, fontWeight: "700" },

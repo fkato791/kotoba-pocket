@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { scheduleReview } from "../src/features/review/fsrs";
+import { setReviewPace } from "../src/features/review/reviewPreferences";
 
 describe("FSRS-compatible scheduler", () => {
   it("schedules first good review into the future", () => {
@@ -12,5 +13,17 @@ describe("FSRS-compatible scheduler", () => {
     const result = scheduleReview({ stability: 5, difficulty: 5, scheduledDays: 5, lapses: 1 }, "again", "2026-05-10T00:00:00.000Z");
     expect(result.scheduledDays).toBe(0);
     expect(result.lapses).toBe(2);
+  });
+
+  it("lets users choose shorter or longer review intervals", async () => {
+    await setReviewPace("focused");
+    const focused = scheduleReview({ stability: 10, difficulty: 5, scheduledDays: 10, lapses: 0 }, "good", "2026-05-10T00:00:00.000Z");
+
+    await setReviewPace("relaxed");
+    const relaxed = scheduleReview({ stability: 10, difficulty: 5, scheduledDays: 10, lapses: 0 }, "good", "2026-05-10T00:00:00.000Z");
+
+    await setReviewPace("standard");
+
+    expect(focused.scheduledDays).toBeLessThan(relaxed.scheduledDays);
   });
 });

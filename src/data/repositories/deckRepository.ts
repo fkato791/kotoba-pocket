@@ -22,10 +22,11 @@ export async function findOrCreateDeck(name?: string | null): Promise<Deck> {
   return createDeck({ name: normalized, folder: null, color: "#2563EB" });
 }
 
-export async function listDecks(): Promise<Deck[]> {
+export async function listDecks(options: { includeDeleted?: boolean } = {}): Promise<Deck[]> {
   const db = await getDatabase();
+  const deletedClause = options.includeDeleted ? "" : "WHERE deleted_at IS NULL";
   const rows = await db.getAllAsync<Record<string, unknown>>(
-    "SELECT * FROM decks WHERE deleted_at IS NULL ORDER BY sort_order ASC, updated_at DESC"
+    `SELECT * FROM decks ${deletedClause} ORDER BY sort_order ASC, updated_at DESC`
   );
   return rows.map(mapDeck);
 }
@@ -59,4 +60,32 @@ export async function createDeck(input: Pick<Deck, "name" | "folder" | "color">)
   );
   await enqueueChange("deck", "upsert", deck as unknown as Record<string, unknown>);
   return deck;
+}
+
+export async function updateDeck(id: string, patch: Partial<Pick<Deck, "name" | "folder" | "color" | "sort_order" | "deleted_at">>): Promise<Deck> {
+  const current = (await listDecks({ includeDeleted: true })).find(deck => deck.id === id);
+  if (!current) throw new Error("Deck not found");
+  const next: Deck = {
+    ...current,
+    ...patch,
+    updated_at: nowIso()
+  };
+  const db = await getDatabase();
+  await db.runAsync(
+    "UPDATE decks SET name = ?, folder = ?, color = ?, is_private = ?, sort_order = ?, updated_at = ?, deleted_at = ? WHERE id = ?",
+    next.name,
+    next.folder,
+    next.color,
+    next.is_private ? 1 : 0,
+    next.sort_order,
+    next.updated_at,
+    next.deleted_at,
+    id
+  );
+  await enqueueChange("deck", patch.deleted_at ? "delete" : "upsert", next as unknown as Record<string, unknown>);
+  return next;
+}
+
+export async function deleteDeck(id: string): Promise<Deck> {
+  return updateDeck(id, { deleted_at: nowIso() });
 }

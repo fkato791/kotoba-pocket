@@ -1,5 +1,5 @@
 import { StyleSheet, Text, TextInput, type TextInputProps, View } from "react-native";
-import { colors, spacing } from "@/ui/theme";
+import { colors, isClassicWindows, spacing } from "@/ui/theme";
 
 interface AppInputProps extends TextInputProps {
   label: string;
@@ -26,10 +26,10 @@ const styles = StyleSheet.create({
   label: { color: colors.text, fontSize: 14, fontWeight: "700" },
   input: {
     minHeight: 48,
-    borderRadius: 8,
+    borderRadius: isClassicWindows ? 0 : 8,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
+    borderColor: isClassicWindows ? "#404040" : colors.border,
+    backgroundColor: isClassicWindows ? "#FFFFFF" : colors.surface,
     paddingHorizontal: spacing.md,
     color: colors.text,
     fontSize: 16

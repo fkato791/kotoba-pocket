@@ -37,7 +37,7 @@ export function CardDetailScreen(): JSX.Element {
     });
   }, [card?.id, card?.term]);
 
-  if (!card) return <EmptyState title="カードが見つかりません" />;
+  if (!card) return <EmptyState title="単語カードが見つかりません" />;
 
   async function save(patch: Partial<Card> = {}): Promise<void> {
     if (!card) return;
@@ -62,7 +62,7 @@ export function CardDetailScreen(): JSX.Element {
   function confirmDelete(): void {
     if (!card) return;
     const currentCard = card;
-    Alert.alert("削除しますか？", "このカードは一覧から消えます。CSV/JSONバックアップがない場合は復元できません。", [
+    Alert.alert("削除しますか？", "この単語カードは一覧から消えます。CSV/JSONバックアップがない場合は復元できません。", [
       { text: "キャンセル", style: "cancel" },
       {
         text: "削除",
@@ -75,13 +75,13 @@ export function CardDetailScreen(): JSX.Element {
   return (
     <ScrollView contentContainerStyle={styles.content}>
       <View style={styles.header}>
-        <Text style={styles.title}>{card.term || "カード編集"}</Text>
+        <Text style={styles.title}>{card.term || "単語カード編集"}</Text>
         <Text style={styles.subtitle}>英語・意味・種類・メモを編集できます。</Text>
       </View>
 
       {duplicateCount > 0 ? (
         <View style={styles.warningBox}>
-          <Text style={styles.warningText}>同じ英語のカードが{duplicateCount}件あります。</Text>
+          <Text style={styles.warningText}>同じ英語の単語カードが{duplicateCount}件あります。</Text>
         </View>
       ) : null}
 

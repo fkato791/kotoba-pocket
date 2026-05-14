@@ -4,6 +4,7 @@ import { handleAuthCallbackUrl } from "@/features/auth/authCallback";
 import { initializeDatabase } from "@/data/local/database";
 import { supabase } from "@/data/remote/supabaseClient";
 import { syncWorker } from "@/features/sync/syncWorker";
+import { loadReviewPace } from "@/features/review/reviewPreferences";
 
 export function useAppBootstrap(): void {
   useEffect(() => {
@@ -20,7 +21,7 @@ export function useAppBootstrap(): void {
     void handleAuthCallbackUrl()
       .catch(() => undefined)
       .finally(() => {
-        void initializeDatabase().then(() => syncWorker.start());
+        void Promise.all([initializeDatabase(), loadReviewPace()]).then(() => syncWorker.start());
       });
     return () => {
       linkSubscription.remove();

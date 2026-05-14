@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
-import { colors, spacing } from "@/ui/theme";
+import { colors, isClassicWindows, spacing } from "@/ui/theme";
 
 interface AppButtonProps {
   label: string;
@@ -37,7 +37,9 @@ export function AppButton({
     >
       {loading ? <ActivityIndicator color={variant === "primary" ? colors.primaryText : colors.primary} /> : null}
       {!loading && icon ? <View style={styles.icon}>{icon}</View> : null}
-      <Text style={[styles.label, variant === "primary" ? styles.primaryLabel : styles.secondaryLabel]}>{label}</Text>
+      <Text style={[styles.label, variant === "primary" && !isClassicWindows ? styles.primaryLabel : styles.secondaryLabel]}>
+        {label}
+      </Text>
     </Pressable>
   );
 }
@@ -46,13 +48,22 @@ const styles = StyleSheet.create({
   button: {
     minHeight: 48,
     paddingHorizontal: spacing.lg,
-    borderRadius: 8,
+    borderRadius: isClassicWindows ? 0 : 8,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
-    gap: spacing.sm
+    gap: spacing.sm,
+    ...(isClassicWindows
+      ? {
+          borderWidth: 1,
+          borderTopColor: "#FFFFFF",
+          borderLeftColor: "#FFFFFF",
+          borderRightColor: "#404040",
+          borderBottomColor: "#404040"
+        }
+      : {})
   },
-  primary: { backgroundColor: colors.primary },
+  primary: { backgroundColor: isClassicWindows ? colors.surface : colors.primary },
   secondary: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   danger: { backgroundColor: colors.danger },
   disabled: { opacity: 0.5 },

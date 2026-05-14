@@ -315,7 +315,12 @@ function createMemoryDatabase(): AppDatabase {
     },
     async getAllAsync<T>(source: string, ...params: unknown[]) {
       const sql = source.trim().replace(/\s+/g, " ").toLowerCase();
-      if (sql.includes("from decks")) return sortRows(memoryState.decks) as T[];
+      if (sql.includes("from decks")) {
+        const decks = sql.includes("where deleted_at is null")
+          ? memoryState.decks.filter(deck => deck.deleted_at === null)
+          : memoryState.decks;
+        return sortRows(decks) as T[];
+      }
       if (sql.includes("from sync_queue")) return [...memoryState.sync_queue] as T[];
       if (sql.includes("from sync_state")) return [...memoryState.sync_state] as T[];
       if (sql.includes("from review_logs") && sql.includes("group by")) {
@@ -377,6 +382,12 @@ function updateCardRow(source: string, params: unknown[]): void {
   const id = params.at(-1);
   const row = memoryState.cards.find(card => card.id === id);
   if (!row) return;
+  const sql = source.trim().replace(/\s+/g, " ").toLowerCase();
+  if (sql.startsWith("update cards set deleted_at = ?, updated_at = ?")) {
+    const [deleted_at, updated_at] = params;
+    Object.assign(row, { deleted_at, updated_at });
+    return;
+  }
   if (source.includes("scheduled_days = ?") && !source.includes("term = ?")) {
     const [
       due_at,
